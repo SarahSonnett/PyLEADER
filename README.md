@@ -1,9 +1,50 @@
 # PyLEADER
 
-A Python version of the LEADER package (originally written in MATLAB; Nortunen et al. 2017),
+A Python version of the LEADER package (originally written in MATLAB; Nortunen & Kaasalainen 2017),
 with a few enhancements for diagnostics and error determination. PyLEADER derives the
-distributions of asteroid shape elongation (`p`) and spin-axis orientation (`beta`) for a
+distributions of asteroid shape elongation (`p`) and spin-axis latitude (`beta`) for a
 population from WISE/NEOWISE thermal photometry.
+
+## How it works
+
+PyLEADER implements the **LEADER** method (*Latitudes and Elongations of Asteroid
+Distributions Estimated Rapidly*) of Nortunen & Kaasalainen (2017). For large, sparsely
+sampled populations, inverting individual lightcurves is infeasible — so instead of solving
+for one object at a time, LEADER recovers the **joint distribution of shape elongation `p`
+and spin-axis latitude `β` for the whole population** from the statistics of brightness
+variations. Each object is modeled as a triaxial ellipsoid with axes `a ≥ b = c`; the shape
+elongation is `p = b/a ∈ (0, 1]` (`p = 1` is a sphere), and `β` is the spin-axis latitude
+relative to the ecliptic.
+
+**1. Per object — brightness amplitude.** For each apparition, from the phase-corrected
+intensities `L` we compute the brightness-dispersion statistic and convert it to an
+amplitude `A` (Eq. 7 of Nortunen & Kaasalainen 2017):
+
+$$\eta = \frac{\Delta(L^2)}{\langle L^2\rangle}, \quad \Delta(L^2)=\sqrt{\big\langle (L^2-\langle L^2\rangle)^2\big\rangle}, \qquad A = \sqrt{1 - \dfrac{1}{\dfrac{1}{\sqrt{8}\,\eta} + \tfrac{1}{2}}}$$
+
+In the code this is `eta = std(L**2)/mean(L**2)` and the `A` formula in
+[`lightcurve.py`](pyleader/lightcurve.py).
+
+**2. Population — forward model.** Pooling `A` over all sampled objects gives the cumulative
+distribution `C(A)`. LEADER writes it as a weighted sum of analytic basis functions
+`F_ij` over a grid of `(p_i, β_j)` bins, which is a linear system in the **occupation numbers**
+`w_ij` (the unnormalized joint distribution of `p` and `β`):
+
+$$C(A) = \sum_{i,j} w_{ij}\, F_{ij}(A; p_i, \beta_j) \;\equiv\; M\mathbf{w}$$
+
+The matrix `M` is assembled in [`inversion.py`](pyleader/inversion.py).
+
+**3. Population — regularized inversion.** The weights are recovered by non-negative least
+squares with smoothness operators `R_p`, `R_β` that penalize sharp gradients in the `p` and
+`β` directions (strengths `δ_p`, `δ_β`):
+
+$$\min_{\mathbf{w}\,\ge\,0} \left\lVert \tilde{M}\mathbf{w} - \tilde{C} \right\rVert, \qquad \tilde{M} = \begin{bmatrix} M \\\\ \sqrt{\delta_p}\,R_p \\\\ \sqrt{\delta_\beta}\,R_\beta \end{bmatrix}$$
+
+solved with SciPy's `lsq_linear` under the positivity bound `w ≥ 0`. The peak of `w` gives the
+population's most likely `(p, β)`; repeating the whole experiment over many random draws of the
+sample (the *trials*) yields the spread used for error determination — the Gaussian-fit summary
+histograms shown below. This per-trial error determination and the accompanying diagnostics are
+the enhancements added here, used in Sonnett, Lilly & Grav (2025).
 
 ## Repo contents
 
@@ -113,3 +154,12 @@ A few clear bugs in the notebooks were fixed during conversion; each fix is mark
 the source (phase-correction return value, an apparition off-by-one, the forced-N subsampling,
 and removal of dead `interp2d`/`mlab` imports). Because of these fixes, results will not be
 bit-for-bit identical to the original notebooks.
+
+## References
+
+- Nortunen, H., & Kaasalainen, M. 2017, *LEADER: fast estimates of asteroid shape elongation
+  and spin latitude distributions from scarce photometry*, Astronomy & Astrophysics, 608, A91.
+  [doi:10.1051/0004-6361/201731360](https://doi.org/10.1051/0004-6361/201731360)
+- Sonnett, S., Lilly, E., & Grav, T. 2025, *Exploring Dynamical and Evolutionary Processes via
+  Debiased Main Belt Asteroid Size-Frequency Distributions*, EPSC-DPS Joint Meeting 2025,
+  EPSC-DPS2025-2069. [doi:10.5194/epsc-dps2025-2069](https://doi.org/10.5194/epsc-dps2025-2069)
