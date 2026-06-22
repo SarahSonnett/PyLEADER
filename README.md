@@ -79,6 +79,34 @@ cfg = AnalysisConfig(famid="3815", diam_low=5.0, diam_high=10.0, Ntrials=2, Ndra
 outdir = run_analysis(cfg, seed=0)
 ```
 
+## Example output
+
+The figures below come from a run on collisional family 3815 (5–10 km diameter range,
+100 trials), produced by the original notebook workflow. A run writes per-trial diagnostics
+into each `Trial*/` subdirectory and population-level summaries at the top of the output
+directory.
+
+**Per-trial diagnostics**
+
+The inversion fits the cumulative distribution of light-curve amplitudes `A`. The relative
+error quantifies how well the reconstructed CDF (∑ wᵢⱼFᵢⱼ) matches the observed one:
+
+![Fit of the amplitude CDF](docs/images/RelativeError.png)
+
+The solved occupation numbers `w` over the (shape `p`, spin-axis `β`) grid, and the same
+solution after smoothing into a joint distribution f(p, β):
+
+![Occupation numbers over (p, beta)](docs/images/OccupationNumbers_w.png)
+![Smoothed joint distribution f(p, beta)](docs/images/Solutions_smoothed.png)
+
+**Population summaries (across all trials)**
+
+The peak of the shape (`p`) and spin-axis (`β`) distributions over all 100 trials, each with a
+Gaussian fit giving the population value and its spread:
+
+![Distribution of p peaks](docs/images/Summary_pmax.png)
+![Distribution of beta peaks](docs/images/Summary_betamax.png)
+
 ## Notes on the notebook → package conversion
 
 A few clear bugs in the notebooks were fixed during conversion; each fix is marked `# FIX:` in
