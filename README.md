@@ -81,7 +81,7 @@ outdir = run_analysis(cfg, seed=0)
 
 ## Example output
 
-The figures below come from a run on collisional family 3815 (5–10 km diameter range,
+The figures below come from a run on the Hygiea family (family 10; 3–5 km diameter range,
 100 trials), produced by the original notebook workflow. A run writes per-trial diagnostics
 into each `Trial*/` subdirectory and population-level summaries at the top of the output
 directory.
