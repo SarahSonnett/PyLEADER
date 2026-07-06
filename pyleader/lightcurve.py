@@ -19,6 +19,7 @@ import random
 import numpy as np
 
 from .config import AnalysisConfig
+from .obsio import read_obs
 
 
 def _normr(mat: np.ndarray) -> np.ndarray:
@@ -108,33 +109,13 @@ def lcg_read_WISE(fname: str, cfg: AnalysisConfig):
     apparition, the number of apparitions found, and the array of derived
     amplitudes ``A`` (one per apparition with at least ``cfg.wanted`` points).
     """
-    with open(fname, "r") as fid:
-        lines = [line.rstrip() for line in fid]
-
-    nblocks = int(lines[0])
-
-    dates = np.zeros(nblocks)
-    e_sun = np.zeros((nblocks, 3))
-    e_earth = np.zeros((nblocks, 3))
-    flux = [[None for _ in range(4)] for _ in range(nblocks)]
-    fluxerr = [[None for _ in range(4)] for _ in range(nblocks)]
-
-    ilinestart = 1
-    for i in range(nblocks):
-        if ilinestart >= len(lines):
-            break  # tolerate files that omit the final trailing blank lines
-        if lines[ilinestart]:
-            dates[i] = float(lines[ilinestart].split()[0])
-            nfilters = int(lines[ilinestart].split()[1])
-            e_sun[i, :] = lines[ilinestart + 1].split()
-            e_earth[i, :] = lines[ilinestart + 2].split()
-            for j in range(nfilters):
-                filter_index = int(lines[ilinestart + 3 + j].split()[3])
-                flux[i][filter_index] = float(lines[ilinestart + 3 + j].split()[1])
-                fluxerr[i][filter_index] = float(lines[ilinestart + 3 + j].split()[2])
-            ilinestart += 5 + nfilters
-        else:
-            ilinestart += 1
+    obs = read_obs(fname)
+    nblocks = obs.n
+    dates = obs.dates.copy()
+    e_sun = obs.e_sun.copy()
+    e_earth = obs.e_earth.copy()
+    flux = obs.flux
+    fluxerr = obs.fluxerr
 
     # Construct per-filter flux vectors
     flux1, flux2, flux3, flux4 = [], [], [], []

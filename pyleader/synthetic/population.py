@@ -67,10 +67,16 @@ def _model_files(cfg: SyntheticConfig):
 
 
 def _geometry_files(cfg: SyntheticConfig):
-    files = sorted(glob.glob(os.path.join(cfg.geometry_dir, "*.obs")))
+    if cfg.geometry_files is not None:
+        files = list(cfg.geometry_files)
+    else:
+        files = sorted(glob.glob(os.path.join(cfg.geometry_dir, "*.obs")))
+    files = [f for f in files if not os.path.basename(f).startswith("Nofilter")]
     if not files:
-        raise FileNotFoundError(f"No .obs geometry files in {cfg.geometry_dir}.")
-    return [f for f in files if not os.path.basename(f).startswith("Nofilter")]
+        raise FileNotFoundError(
+            f"No .obs geometry files ({cfg.geometry_dir if cfg.geometry_files is None else 'geometry_files'})."
+        )
+    return files
 
 
 def _draw_shape(model_files, cfg: SyntheticConfig):

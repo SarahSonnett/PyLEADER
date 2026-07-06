@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..obsio import read_obs
+
 
 def transform_mat(phi0, omega, t, t0, beta, lam):
     """Rotation matrix from the inertial frame to the asteroid body frame.
@@ -43,32 +45,12 @@ def read_synth_geometry(path: str, phase_angle_limit: float = 30.0):
     phase angle above ``phase_angle_limit`` (degrees). Only the geometry is
     used downstream; the synthetic brightness is computed from the shape model.
     """
-    with open(path, "r") as fid:
-        lines = [ln.rstrip() for ln in fid]
-
-    nblocks = int(lines[0])
-    dates = np.zeros(nblocks)
-    e_sun = np.zeros((nblocks, 3))
-    e_earth = np.zeros((nblocks, 3))
-    flux = [[None] * 4 for _ in range(nblocks)]
-    fluxerr = [[None] * 4 for _ in range(nblocks)]
-
-    ilinestart = 1
-    for i in range(nblocks):
-        if ilinestart >= len(lines):
-            break  # tolerate files that omit the final trailing blank lines
-        if lines[ilinestart]:
-            dates[i] = float(lines[ilinestart].split()[0])
-            nfilters = int(lines[ilinestart].split()[1])
-            e_sun[i, :] = lines[ilinestart + 1].split()
-            e_earth[i, :] = lines[ilinestart + 2].split()
-            for j in range(nfilters):
-                fidx = int(lines[ilinestart + 3 + j].split()[3])
-                flux[i][fidx] = float(lines[ilinestart + 3 + j].split()[1])
-                fluxerr[i][fidx] = float(lines[ilinestart + 3 + j].split()[2])
-            ilinestart += 5 + nfilters
-        else:
-            ilinestart += 1
+    obs = read_obs(path)
+    nblocks = obs.n
+    dates = obs.dates
+    e_sun = obs.e_sun
+    e_earth = obs.e_earth
+    flux, fluxerr = obs.flux, obs.fluxerr
 
     # per-filter error to choose the best filter
     errs = []

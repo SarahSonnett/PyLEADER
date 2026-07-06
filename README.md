@@ -5,6 +5,19 @@ with a few enhancements for diagnostics and error determination. PyLEADER derive
 distributions of asteroid shape elongation (`p`) and spin-axis latitude (`beta`) for a
 population from WISE/NEOWISE thermal photometry.
 
+Give it a **dynamical population ID** — a Nesvorný collisional family or a background main-belt
+population — and the end-to-end driver queries NEOWISE, runs LEADER, derives a correction function
+from *that population's own observing geometry*, and applies it:
+
+```sh
+python scripts/run_population.py 1128            # a collisional family
+python scripts/run_population.py BG_IB_Ctypes    # a background population (add --build to fetch .obs)
+```
+
+Because each population's `.obs` files have different cadence/geometry, the correction is bespoke to
+the dataset (see [Per-population pipeline](#per-population-pipeline)). The individual stages
+(obs-building, analysis, synthetic validation, correction) also remain available as separate commands.
+
 ## How it works
 
 PyLEADER implements the **LEADER** method (*Latitudes and Elongations of Asteroid
@@ -53,6 +66,9 @@ The science is now a modular `pyleader` package (the original notebooks are kept
 ```
 pyleader/
   config.py        AnalysisConfig / ObsBuildConfig (replaces the notebook "top cell")
+  pipeline.py      PopulationConfig + run_population(): the end-to-end per-population driver
+  populations.py   resolve a family / background ID to its member objects
+  obsio.py         read/write .obs files (auto-detects tabular or legacy block format)
   naming.py        designation conversions (analysis side)
   lightcurve.py    read & phase-correct .obs files -> amplitudes  (lcg_read_WISE)
   inversion.py     linear inversion for (p, beta) occupation numbers  (leader_invert)
@@ -60,11 +76,14 @@ pyleader/
   plotting.py      per-trial and summary plots
   analysis.py      run_analysis(): the main experiment driver
   obsfiles/        build .obs input files from IRSA + JPL Horizons
-  synthetic/       synthetic validation: assign p/beta, recover, compare (from DAMIT models)
+  synthetic/       synthetic validation + bias correction (from DAMIT models)
 scripts/
+  run_population.py       CLI for the end-to-end per-population pipeline
   run_analysis.py         CLI for the analysis
   build_obs_files.py      CLI for building .obs input files
   run_synthetic.py        CLI for a synthetic validation run
+  sweep_synthetic.py      CLI to sweep the synthetic validation over a (p, beta) grid
+  fit_correction.py       CLI to fit a bias-correction function from a sweep
   compare_populations.py  CLI to compare two recovered p/beta distributions
 ```
 
@@ -80,9 +99,9 @@ pip install -e ".[obs]"     # also install the .obs-building deps
 
 Core deps are `numpy`/`scipy`/`matplotlib`; the `[obs]` extra adds `astropy`/`sunpy`/`requests`
 (needed only for building `.obs` files, which also requires internet access). Installing puts
-console commands on your `PATH` (one per script): `pyleader-analysis`, `pyleader-build-obs`,
-`pyleader-synthetic`, `pyleader-compare`, `pyleader-sweep`, `pyleader-plot-sweep`,
-`pyleader-fit-correction`.
+console commands on your `PATH` (one per script): `pyleader-population` (the end-to-end driver),
+`pyleader-analysis`, `pyleader-build-obs`, `pyleader-synthetic`, `pyleader-sweep`,
+`pyleader-plot-sweep`, `pyleader-fit-correction`, `pyleader-compare`.
 
 You can also run without installing, straight from a source checkout — every `pyleader-<name>`
 command has an equivalent `python scripts/<name>.py`. The examples below use the `python scripts/…`
@@ -187,14 +206,52 @@ because the recovered `β` range is compressed, the `β` correction extrapolates
 range and should be treated as indicative. Regenerate it for your own configuration with
 `scripts/fit_correction.py`.
 
+### Per-population pipeline
+
+The single driver chains all of the above for one population, deriving the correction from **that
+population's own `.obs` observing geometry** (so it reflects the actual cadence of the data being
+analyzed — the scientifically appropriate choice, since it differs from dataset to dataset):
+
+```sh
+# a collisional family, analyzing an existing .obs dataset end-to-end
+python scripts/run_population.py 1128 --diam-low 1 --diam-high 100
+
+# a background population, fetching .obs from NEOWISE first (needs the [obs] extras + internet)
+python scripts/run_population.py BG_IB_Ctypes --build
+```
+
+Family IDs are numeric/family designations (members from `AllMBAFamilyMembers.txt`); background IDs
+look like `BG_<REGION>_<TYPE>types` (e.g. `BG_IB_Ctypes`, members from
+`BGobjs_<REGION>_<TYPE>type_neowise.txt`). The driver runs the LEADER analysis, sweeps the synthetic
+validation over a `(p_peak, β_peak)` grid **using the population's geometries and matched
+tolerances**, fits a population-specific `correction_function.json`, and writes a
+`population_report.txt` mapping the recovered `(p, β)` peak to its corrected estimate (flagging when
+the recovered value falls outside the synthetic range, where the correction extrapolates).
+
+### `.obs` file format
+
+PyLEADER reads **either** `.obs` layout — `read_obs()` auto-detects them, so datasets from prior
+analyses work unchanged:
+
+- **Tabular** (written by default): a `#` comment header then one whitespace row per measurement —
+  `jd  sun_x sun_y sun_z  obs_x obs_y obs_z  wavelength flux fluxerr filter`.
+- **Legacy block**: the original format (count header; per-epoch Sun/observer vectors and
+  `λ flux σ filter` lines separated by blank lines). Pass `--legacy-format` to write it.
+
+Both are fully supported; the tabular form is just less fiddly to produce and parse.
+
 ### As a library
 
 ```python
-from pyleader import AnalysisConfig, run_analysis, SyntheticConfig, run_synthetic
+from pyleader import (AnalysisConfig, run_analysis, SyntheticConfig, run_synthetic,
+                      PopulationConfig, run_population)
 
 outdir = run_analysis(AnalysisConfig(famid="3815", Ntrials=2, Ndraws=50, overwrite=True), seed=0)
-
 res = run_synthetic(SyntheticConfig(p_peak=0.5, b_peak=0.4, Ndraws=200), seed=0)
+
+# end-to-end for one population (analysis + per-population correction + apply)
+result = run_population(PopulationConfig(pop_id="1128", diam_low=1, diam_high=100), seed=0)
+print(result.recovered, "->", result.corrected)
 ```
 
 ## Example output

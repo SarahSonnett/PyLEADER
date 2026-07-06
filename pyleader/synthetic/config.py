@@ -66,6 +66,9 @@ class SyntheticConfig:
     damit_list: str = f"{_LEADER_MASTER}/asteroideja.txt"
     damit_dir: str = _DAMIT_MODELS_DIR
     geometry_dir: str = f"{_LEADER_MASTER}/WISE_3band_subset/WISE/WISE_3band/obs"
+    # Explicit list of .obs geometry files; when set it overrides geometry_dir
+    # (used by the per-population pipeline to match the analyzed objects).
+    geometry_files: Optional[list] = None
     base_dir: str = DEFAULT_BASE_DIR
     outdir: Optional[str] = None             # defaults via `resolved_outdir`
 

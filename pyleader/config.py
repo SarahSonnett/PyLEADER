@@ -124,12 +124,24 @@ class ObsBuildConfig:
     family_file: str = "AllMBAFamilyMembers.txt"  # MBA family membership listing
     neowise_fle: str = "neowise_mainbelt.csv"     # NEOWISE-determined properties (PDS SBN)
 
+    # "family" -> Fam<famid> dir + family-membership cross-match;
+    # "background" -> <famid> dir + BGobjs_*_neowise.txt membership.
+    population_kind: str = "family"
+
+    # Write .obs in the legacy block format instead of the default tabular format.
+    legacy_format: bool = False
+
     base_dir: str = DEFAULT_BASE_DIR
 
     @property
+    def _poptoken(self) -> str:
+        """Directory token: ``Fam<famid>`` for families, ``<famid>`` for backgrounds."""
+        return f"Fam{self.famid}" if self.population_kind == "family" else self.famid
+
+    @property
     def data_dir(self) -> str:
-        """Directory the ``.obs`` files are written to (notebook: ``Fam<id>_data_...``)."""
-        return f"{self.base_dir}/Fam{self.famid}_data_{self.cat}_{self.filterpriority}"
+        """Directory the ``.obs`` files are written to (matches ``AnalysisConfig.datadir``)."""
+        return f"{self.base_dir}/{self._poptoken}_data_{self.cat}_{self.filterpriority}"
 
     @property
     def ifilt(self) -> int:

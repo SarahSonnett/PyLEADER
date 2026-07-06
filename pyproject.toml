@@ -23,6 +23,7 @@ obs = ["astropy", "sunpy", "requests"]
 Repository = "https://github.com/SarahSonnett/PyLEADER"
 
 [project.scripts]
+pyleader-population      = "pyleader.cli.run_population:main"
 pyleader-analysis        = "pyleader.cli.run_analysis:main"
 pyleader-build-obs       = "pyleader.cli.build_obs_files:main"
 pyleader-synthetic       = "pyleader.cli.run_synthetic:main"

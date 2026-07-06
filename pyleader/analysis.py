@@ -22,6 +22,38 @@ from .plotting import leader_plots, plot_alltrials
 from .postprocess import leader_postprocess_WISE
 
 
+def _load_neowise_diameters(cfg: AnalysisConfig):
+    """Return ``(name_mpced_n, diam_n)`` from the NEOWISE catalog."""
+    name_mpced_n_full = np.genfromtxt(cfg.neowise_path, unpack=True, usecols=(2), delimiter=",", dtype=str)
+    name_mpced_n = np.asarray(
+        [name_mpced_n_full[i][1:-1].replace(" ", "") for i in range(len(name_mpced_n_full))]
+    )
+    diam_n = np.genfromtxt(cfg.neowise_path, unpack=True, usecols=(11), delimiter=",", dtype=float)
+    return name_mpced_n, diam_n
+
+
+def diameter_matched_files(cfg: AnalysisConfig, name_mpced_n=None, diam_n=None):
+    """List the population's ``.obs`` files whose NEOWISE diameter is in range.
+
+    Shared by :func:`run_analysis` and the per-population pipeline (so the
+    synthetic correction samples geometry from exactly the analyzed objects).
+    """
+    if name_mpced_n is None or diam_n is None:
+        name_mpced_n, diam_n = _load_neowise_diameters(cfg)
+
+    lcg_files = [os.path.join(cfg.datadir, f) for f in os.listdir(cfg.datadir)
+                 if f.endswith(".obs") and not f.startswith("Nofilter")]
+
+    matched = []
+    for path in lcg_files:
+        objname = path.split("/")[-1].split(".")[0]
+        objname_mpec = convert_to_mpecname(objname)
+        diammatch = np.mean(np.asarray(diam_n.compress((name_mpced_n == objname_mpec).flat), dtype=float))
+        if cfg.diam_low <= diammatch <= cfg.diam_high:
+            matched.append(path)
+    return matched
+
+
 def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = False) -> str:
     """Run the full LEADER inversion experiment and return the output directory.
 
@@ -42,28 +74,8 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
     outdir = cfg.outdir
     famid = cfg.famid
 
-    # --- NEOWISE catalog: object names + diameters ---
-    name_mpced_n_full = np.genfromtxt(cfg.neowise_path, unpack=True, usecols=(2), delimiter=",", dtype=str)
-    name_mpced_n = np.asarray(
-        [name_mpced_n_full[i][1:-1].replace(" ", "") for i in range(len(name_mpced_n_full))]
-    )
-    diam_n = np.genfromtxt(cfg.neowise_path, unpack=True, usecols=(11), delimiter=",", dtype=float)
-
-    # --- collect .obs files (skipping the 'Nofilter' placeholders) ---
-    allfiles = []
-    for file in os.listdir(datadir):
-        if file.endswith(".obs") and not file.startswith("Nofilter"):
-            allfiles.append(os.path.join(datadir, file))
-    lcg_files = np.asarray(allfiles)
-
-    # --- restrict to objects with NEOWISE diameter in [diam_low, diam_high] ---
-    lcg_files_diammatch = []
-    for i in range(len(lcg_files)):
-        objname = lcg_files[i].split("/")[-1].split(".")[0]
-        objname_mpec = convert_to_mpecname(objname)
-        diammatch = np.mean(np.asarray(diam_n.compress((name_mpced_n == objname_mpec).flat), dtype=float))
-        if cfg.diam_low <= diammatch <= cfg.diam_high:
-            lcg_files_diammatch.append(lcg_files[i])
+    name_mpced_n, diam_n = _load_neowise_diameters(cfg)
+    lcg_files_diammatch = diameter_matched_files(cfg, name_mpced_n, diam_n)
 
     # --- prepare output directory ---
     try:

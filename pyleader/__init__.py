@@ -23,6 +23,7 @@ from .analysis import run_analysis
 from .inversion import InversionResult, leader_invert
 from .lightcurve import lcg_read_WISE, leader_phasecorr
 from .synthetic import SyntheticConfig, run_synthetic, compare_populations
+from .pipeline import PopulationConfig, run_population
 
 __all__ = [
     "AnalysisConfig",
@@ -36,6 +37,8 @@ __all__ = [
     "SyntheticConfig",
     "run_synthetic",
     "compare_populations",
+    "PopulationConfig",
+    "run_population",
 ]
 
 __version__ = "0.1.0"

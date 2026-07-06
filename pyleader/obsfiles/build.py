@@ -14,6 +14,8 @@ import shutil
 import numpy as np
 
 from ..config import ObsBuildConfig
+from ..obsio import ObsData, write_obs_table
+from ..populations import resolve_members
 from .columns import determine_column_indices
 from .naming import convert_to_mpecname
 from .photometry import convert_mags_to_janskys, replace_null
@@ -32,91 +34,69 @@ def _ensure_data_dir(cfg: ObsBuildConfig) -> None:
 
 
 def prepare_matchids(cfg: ObsBuildConfig):
-    """Cross-match the family membership list against the NEOWISE catalog.
+    """Return ``(matchids, matchids_curlformat)`` for the population.
 
-    Ports notebook cells 4, 6, 7 and 8.  Returns ``(matchids, matchids_curlformat)``:
-    the MPC-ed names found in NEOWISE, and the identifier to use when querying IRSA
-    (numbered designation when available, otherwise provisional designation).
+    Back-compat wrapper around :func:`pyleader.populations.resolve_members`
+    (handles both collisional families and background populations).
     """
-    # --- family membership (cell 4) ---
-    famid_all, mpecobj_all, objid_all = np.genfromtxt(
-        cfg.family_path, unpack=True, dtype=str, usecols=(0, 1, 2)
-    )
-    objid_mpec = mpecobj_all.compress((famid_all == cfg.famid).flat)
-    print("Number of asteroids in this family = " + str(len(objid_mpec)))
+    return resolve_members(cfg)
 
-    # --- NEOWISE catalog (cell 6) ---
-    objnum_n, provdesig_n, name_mpced_n, diam_n, diamerr_n = np.genfromtxt(
-        cfg.neowise_path, unpack=True, usecols=(0, 1, 2, 11, 12), delimiter=",", dtype=str
-    )
 
-    # --- consolidate duplicate diameter determinations (cell 7): keep smallest error ---
-    u_objnum_n, u_provdesig_n, u_name_mpced_n, u_diam_n, u_diamerr_n = [], [], [], [], []
-    unique_mpecs_n = np.asarray(list(set(name_mpced_n)))
-    for i in range(len(unique_mpecs_n)):
-        imatch = np.where(name_mpced_n == unique_mpecs_n[i])[0]
-        if len(imatch) > 1:
-            ibest_group = np.where(diamerr_n[imatch] == min(diamerr_n[imatch]))[0]
-            if len(ibest_group) > 1:
-                ibest_group = ibest_group[0]
-            ibest = imatch[ibest_group]
-        elif len(imatch) == 1:
-            ibest = imatch
-        else:
-            print("problem finding index matches for " + str(unique_mpecs_n[i]))
-            continue
+# Filter -> (WISE filter index, wavelength, which flux column) per catalog.
+def _filter_slot(cfg: ObsBuildConfig):
+    if cfg.cat in ("allsky_4band_p1bs_psd", "allsky_3band_p1bs_psd"):
+        return (1, 4.6028, "wb") if cfg.filterpriority == "w2" else (2, 11.0984, "wr")
+    if cfg.cat == "neowiser_p1bs_psd":
+        return (1, 4.6028, "wr")
+    raise ValueError(f"catalog not recognized: {cfg.cat!r}")
 
-        u_objnum_n.append(objnum_n[ibest][0])
-        u_provdesig_n.append(provdesig_n[ibest][0].replace('"', "").replace(" ", ""))
-        u_name_mpced_n.append(name_mpced_n[ibest][0].replace('"', "").rstrip())
-        u_diam_n.append(diam_n[ibest][0])
-        u_diamerr_n.append(diamerr_n[ibest][0])
 
-    u_objnum_n = np.asarray(u_objnum_n)
-    u_provdesig_n = np.asarray(u_provdesig_n)
-    u_name_mpced_n = np.asarray(u_name_mpced_n)
+def _build_obsdata(cfg, jd_f, wbflux, wbfluxerr, wrflux, wrfluxerr,
+                   astx, asty, astz, ast_to_wisex, ast_to_wisey, ast_to_wisez) -> ObsData:
+    """Assemble an :class:`ObsData` from the per-epoch geometry and fluxes."""
+    n = len(jd_f)
+    e_sun = np.column_stack([-np.asarray(astx), -np.asarray(asty), -np.asarray(astz)])
+    e_earth = np.column_stack([-np.asarray(ast_to_wisex), -np.asarray(ast_to_wisey), -np.asarray(ast_to_wisez)])
+    fi, wl, which = _filter_slot(cfg)
+    fx, fe = (wbflux, wbfluxerr) if which == "wb" else (wrflux, wrfluxerr)
+    flux = [[None] * 4 for _ in range(n)]
+    fluxerr = [[None] * 4 for _ in range(n)]
+    wave = [[None] * 4 for _ in range(n)]
+    for k in range(n):
+        flux[k][fi] = round(float(fx[k]), 10)
+        fluxerr[k][fi] = round(float(fe[k]), 10)
+        wave[k][fi] = wl
+    return ObsData(np.asarray(jd_f, dtype=float), e_sun, e_earth, flux, fluxerr, wave)
 
-    # --- match family members to NEOWISE objects (cell 8) ---
-    matchids, matchids_curlformat, nomatch = [], [], []
-    for i in range(len(objid_mpec)):
-        imatch = np.where(u_name_mpced_n == objid_mpec[i])[0]
-        if len(imatch) > 0:
-            matchids.append(u_name_mpced_n[imatch][0])
-            if u_objnum_n[imatch] == "0":
-                matchids_curlformat.append(u_provdesig_n[imatch][0])
-            else:
-                matchids_curlformat.append(u_objnum_n[imatch][0])
-        else:
-            nomatch.append(objid_mpec[i])
 
-    matchids = np.asarray(matchids)
-    matchids_curlformat = np.asarray(matchids_curlformat)
-    print(str(len(matchids)) + " asteroids in this family found in the WISE/NEOWISE catalog")
-
-    return matchids, matchids_curlformat
+def _write_block(path: str, data: ObsData) -> None:
+    """Write ObsData in the legacy block format."""
+    with open(path, "w+") as w:
+        w.write(str(int(data.n)) + "\n")
+        for k in range(data.n):
+            nf = sum(1 for filt in range(4) if data.flux[k][filt] is not None)
+            w.write("%s %d\n" % (data.dates[k], nf))
+            w.write("%1.8f %1.8f %1.8f\n" % tuple(data.e_sun[k]))
+            w.write("%1.8f %1.8f %1.8f\n" % tuple(data.e_earth[k]))
+            for filt in range(4):
+                if data.flux[k][filt] is None:
+                    continue
+                w.write("%s %s %s %d\n" % (data.wavelength[k][filt],
+                                           data.flux[k][filt], data.fluxerr[k][filt], filt))
+            w.write("\n")
+            w.write("\n")
 
 
 def _write_obs_file(cfg: ObsBuildConfig, curlformat, jd_f, wbflux, wbfluxerr, wrflux, wrfluxerr,
                     astx, asty, astz, ast_to_wisex, ast_to_wisey, ast_to_wisez) -> None:
-    """Write a single ``.obs`` file (notebook cell 18 inner block)."""
+    """Write a single ``.obs`` file (tabular by default; block if ``cfg.legacy_format``)."""
+    data = _build_obsdata(cfg, jd_f, wbflux, wbfluxerr, wrflux, wrfluxerr,
+                          astx, asty, astz, ast_to_wisex, ast_to_wisey, ast_to_wisez)
     path = f"{cfg.data_dir}/{curlformat}.obs"
-    with open(path, "w+") as wfile:
-        wfile.write(str(int(len(wbflux))) + "\n")
-        for ii in range(len(astx)):
-            wfile.write(str(jd_f[ii]) + " 1\n")
-            wfile.write("%1.8f %1.8f %1.8f\n" % (-astx[ii], -asty[ii], -astz[ii]))
-            wfile.write("%1.8f %1.8f %1.8f\n" % (-ast_to_wisex[ii], -ast_to_wisey[ii], -ast_to_wisez[ii]))
-            if cfg.cat in ("allsky_4band_p1bs_psd", "allsky_3band_p1bs_psd"):
-                if cfg.filterpriority == "w2":
-                    wfile.write("4.6028 " + str(round(wbflux[ii], 10)) + " " + str(round(wbfluxerr[ii], 10)) + " 1\n")
-                if cfg.filterpriority == "w3":
-                    wfile.write("11.0984 " + str(round(wrflux[ii], 10)) + " " + str(round(wrfluxerr[ii], 10)) + " 2\n")
-            elif cfg.cat == "neowiser_p1bs_psd":
-                wfile.write("4.6028 " + str(round(wrflux[ii], 10)) + " " + str(round(wrfluxerr[ii], 10)) + " 1\n")
-            else:
-                continue
-            wfile.write("\n")
-            wfile.write("\n")
+    if cfg.legacy_format:
+        _write_block(path, data)
+    else:
+        write_obs_table(path, data)
 
 
 def build_obs_files(cfg: ObsBuildConfig) -> str:

@@ -18,53 +18,20 @@ Example::
 from __future__ import annotations
 
 import argparse
-import csv
 import os
-import sys
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
-import numpy as np  # noqa: E402
-import matplotlib.pyplot as plt  # noqa: E402
-
 from pyleader.synthetic.correction import (  # noqa: E402
-    apply_correction, fit_from_csv, save_correction,
+    fit_from_csv, plot_correction_fit, save_correction,
 )
-
-
-def _diagnostic_plot(csv_path, coeffs, out_png, stat):
-    with open(csv_path, newline="") as f:
-        rows = list(csv.DictReader(f))
-    p_rec = np.array([float(r[f"p_recovered_{stat}"]) for r in rows])
-    b_rec = np.array([float(r[f"beta_recovered_{stat}"]) for r in rows])
-    p_true = np.array([float(r[f"p_assigned_{stat}"]) for r in rows])
-    b_true = np.array([float(r[f"beta_assigned_{stat}"]) for r in rows])
-    p_fit, b_fit = apply_correction(p_rec, b_rec, coeffs)
-
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 5))
-    d = coeffs["diagnostics"]
-    for ax, true, fit, lbl, r2 in (
-        (a1, p_true, p_fit, "p", d["r2_p"]),
-        (a2, b_true, b_fit, "β (deg)", d["r2_b"]),
-    ):
-        lo, hi = min(true.min(), fit.min()), max(true.max(), fit.max())
-        ax.plot([lo, hi], [lo, hi], "k--", label="1:1")
-        ax.scatter(true, fit, s=25, alpha=0.8)
-        ax.set_xlabel(f"true {lbl}")
-        ax.set_ylabel(f"corrected {lbl}")
-        ax.set_title(f"{lbl}: corrected vs true  (R²={r2:.3f})")
-        ax.grid(True, alpha=0.3)
-        ax.legend()
-    fig.suptitle(f"Correction fit ({stat}-based, recovered→true)")
-    fig.tight_layout()
-    fig.savefig(out_png, dpi=300)
-    plt.close(fig)
 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Fit a bias-correction function from a sweep CSV.")
     p.add_argument("csv", help="path to sweep_stats.csv")
-    p.add_argument("--stat", default="mean", choices=("mean", "median"), help="statistic to correct")
+    p.add_argument("--stat", default="mean", choices=("mean", "median", "peak"),
+                   help="statistic to correct (peak matches LEADER's pmax/betamax)")
     p.add_argument("-o", "--out", default=None, help="output JSON (default next to CSV)")
     args = p.parse_args(argv)
 
@@ -74,7 +41,7 @@ def main(argv=None) -> int:
 
     coeffs = fit_from_csv(args.csv, stat=args.stat)
     save_correction(coeffs, out_json)
-    _diagnostic_plot(args.csv, coeffs, out_png, args.stat)
+    plot_correction_fit(args.csv, coeffs, out_png)
 
     d = coeffs["diagnostics"]
     print(f"Fitted recovered->true correction ({args.stat}-based, n={d['n']}):")
