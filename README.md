@@ -60,9 +60,12 @@ pyleader/
   plotting.py      per-trial and summary plots
   analysis.py      run_analysis(): the main experiment driver
   obsfiles/        build .obs input files from IRSA + JPL Horizons
+  synthetic/       synthetic validation: assign p/beta, recover, compare (from DAMIT models)
 scripts/
-  run_analysis.py      CLI for the analysis
-  build_obs_files.py   CLI for building .obs input files
+  run_analysis.py         CLI for the analysis
+  build_obs_files.py      CLI for building .obs input files
+  run_synthetic.py        CLI for a synthetic validation run
+  compare_populations.py  CLI to compare two recovered p/beta distributions
 ```
 
 The three original analysis notebooks (`LEADER_python_final`, `_bg`, `_forcedN`) are unified
@@ -111,13 +114,37 @@ python scripts/build_obs_files.py --famid 350
 python scripts/build_obs_files.py --famid 350 --curl-only   # just write the bulk curl script
 ```
 
+### Synthetic validation
+
+To validate the method (and derive corrections for real-data results), build a synthetic
+population with a *known* shape/spin distribution, run it through the same inversion, and check
+that the recovered `(p, β)` matches what was assigned. Synthetic brightness is rendered from
+DAMIT shape models (stretched to a target elongation) under real WISE observing geometry.
+
+```sh
+# download the DAMIT models listed in asteroideja.txt, then run with assigned peaks
+python scripts/run_synthetic.py --download --p-peak 0.5 --b-peak 0.4 --seed 0
+
+# compare two recovered populations (e.g. different assigned beta) -> L1/L2/L-inf distances
+python scripts/compare_populations.py runA/synthetic_result.npz runB/synthetic_result.npz \
+    --outdir cmp_A_vs_B --labels "b=0.3" "b=0.8"
+```
+
+The run writes recovered-vs-assigned marginal plots for `p` and `β`, the solution contours, and
+a `synthetic_result.npz` for later comparison. The Hapke scattering law is available via
+`--scattering hapke` (the default `ls_lambert` matches the original MATLAB code).
+
+> DAMIT models are fetched from the DAMIT database; if you use them, please cite
+> Ďurech et al. (2010) and the original papers for the individual shape models.
+
 ### As a library
 
 ```python
-from pyleader import AnalysisConfig, run_analysis
+from pyleader import AnalysisConfig, run_analysis, SyntheticConfig, run_synthetic
 
-cfg = AnalysisConfig(famid="3815", diam_low=5.0, diam_high=10.0, Ntrials=2, Ndraws=50, overwrite=True)
-outdir = run_analysis(cfg, seed=0)
+outdir = run_analysis(AnalysisConfig(famid="3815", Ntrials=2, Ndraws=50, overwrite=True), seed=0)
+
+res = run_synthetic(SyntheticConfig(p_peak=0.5, b_peak=0.4, Ndraws=200), seed=0)
 ```
 
 ## Example output
@@ -163,3 +190,7 @@ bit-for-bit identical to the original notebooks.
 - Sonnett, S., Lilly, E., & Grav, T. 2025, *Exploring Dynamical and Evolutionary Processes via
   Debiased Main Belt Asteroid Size-Frequency Distributions*, EPSC-DPS Joint Meeting 2025,
   EPSC-DPS2025-2069. [doi:10.5194/epsc-dps2025-2069](https://doi.org/10.5194/epsc-dps2025-2069)
+- Ďurech, J., Sidorin, V., & Kaasalainen, M. 2010, *DAMIT: a database of asteroid models*,
+  Astronomy & Astrophysics, 513, A46. [doi:10.1051/0004-6361/200912693](https://doi.org/10.1051/0004-6361/200912693)
+  — source of the shape models used by the synthetic-validation pipeline
+  ([DAMIT database](https://damit.cuni.cz/)).

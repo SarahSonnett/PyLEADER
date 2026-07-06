@@ -22,6 +22,7 @@ from .config import AnalysisConfig, ObsBuildConfig
 from .analysis import run_analysis
 from .inversion import InversionResult, leader_invert
 from .lightcurve import lcg_read_WISE, leader_phasecorr
+from .synthetic import SyntheticConfig, run_synthetic, compare_populations
 
 __all__ = [
     "AnalysisConfig",
@@ -32,6 +33,9 @@ __all__ = [
     "leader_invert",
     "lcg_read_WISE",
     "leader_phasecorr",
+    "SyntheticConfig",
+    "run_synthetic",
+    "compare_populations",
 ]
 
 __version__ = "0.1.0"

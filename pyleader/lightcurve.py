@@ -121,6 +121,8 @@ def lcg_read_WISE(fname: str, cfg: AnalysisConfig):
 
     ilinestart = 1
     for i in range(nblocks):
+        if ilinestart >= len(lines):
+            break  # tolerate files that omit the final trailing blank lines
         if lines[ilinestart]:
             dates[i] = float(lines[ilinestart].split()[0])
             nfilters = int(lines[ilinestart].split()[1])
@@ -189,14 +191,40 @@ def lcg_read_WISE(fname: str, cfg: AnalysisConfig):
     e_earth = e_earth[~largeanglepoints]
     ang = ang[~largeanglepoints]
 
-    # Split the series into apparitions (epochs)
-    dates_back, ang_back, temp_angle, L_back, pointsperapp = [], [], [], [], []
+    # Split the series into apparitions, phase-correct, and reduce to amplitudes.
+    # (Shared with the synthetic pipeline via the helpers below.)
+    L_back, pointsperapp, ang_back, dates_back, Nappar = split_apparitions(
+        L_big, dates, ang, cfg.date_tol
+    )
+
+    combined = False
+    if len(L_back) > 0:
+        L_back, combined = leader_phasecorr(Nappar, pointsperapp, dates, ang_back, L_back, cfg)
+
+    sets = apparition_sets(L_back, pointsperapp, Nappar, combined)
+    A, Npoints = amplitudes_from_sets(sets, cfg.wanted, forced_n=cfg.forced_n)
+
+    Npoints_avg = float(np.mean(Npoints)) if len(Npoints) > 0 else 0
+
+    return Npoints_avg, Nappar, A
+
+
+def split_apparitions(L_big, dates, ang, date_tol):
+    """Group a phase-angle-filtered intensity series into apparitions (epochs).
+
+    Two consecutive points belong to the same apparition while their date gap
+    (measured from the apparition's first point) stays within ``date_tol``.
+    Returns ``(L_back, pointsperapp, ang_back_deg, dates_back, Nappar)`` where
+    ``ang_back`` is converted to degrees and ``dates_back`` is offset to start
+    at zero, matching the original ``lcg_read_WISE`` bookkeeping.
+    """
+    dates_back, ang_back, L_back, pointsperapp = [], [], [], []
     Nappar = 0
     i = 0
     while i < len(L_big) - 1:
         L = [L_big[i]]
         for j in range(i + 1, len(L_big)):
-            if dates[j] - dates[i] <= cfg.date_tol:
+            if dates[j] - dates[i] <= date_tol:
                 L.append(L_big[j])
                 if j == len(L_big) - 1:
                     i_old = i
@@ -212,52 +240,59 @@ def lcg_read_WISE(fname: str, cfg: AnalysisConfig):
         pointsperapp.append(len(L))
         Nappar += 1
 
-        temp = ang[i_old:i_old + len(L)]
-        temp_angle.append(np.max(temp) - np.min(temp))
-
     if len(dates_back) > 0:
         dates_back = dates_back - dates_back[0]
         ang_back = np.rad2deg(ang_back)
 
-    combined = False
-    if len(L_back) > 0:
-        L_back, combined = leader_phasecorr(Nappar, pointsperapp, dates, ang_back, L_back, cfg)
+    return L_back, pointsperapp, ang_back, dates_back, Nappar
 
-    # Compute amplitude A for each usable apparition.
-    # FIX (#1): honor the `combined` flag from phase correction; FIX (#2): the
-    # apparition slices below include their last point.
+
+def apparition_sets(L_back, pointsperapp, Nappar, combined):
+    """Slice ``L_back`` into per-apparition intensity arrays.
+
+    FIX (#1): honors the ``combined`` flag from phase correction (the notebook
+    mis-unpacked it). FIX (#2): slices include their last point (off-by-one).
+    """
     if combined:
-        sets = [np.asarray(L_back, dtype=float)]
-    else:
-        sets = []
-        for i in range(Nappar):
-            ind = int(np.sum(pointsperapp[:i]))
-            inde = int(ind + pointsperapp[i])
-            sets.append(np.asarray(L_back[ind:inde], dtype=float))
+        return [np.asarray(L_back, dtype=float)]
+    sets = []
+    for i in range(Nappar):
+        ind = int(np.sum(pointsperapp[:i]))
+        inde = int(ind + pointsperapp[i])
+        sets.append(np.asarray(L_back[ind:inde], dtype=float))
+    return sets
 
+
+def amplitudes_from_sets(sets, wanted, *, forced_n=False):
+    """Reduce per-apparition intensities to LEADER amplitudes ``A``.
+
+    For each apparition with at least ``wanted`` points, compute the brightness
+    dispersion ``eta = std(L^2)/mean(L^2)`` and the amplitude
+    ``A = sqrt(1 - 1/(1/(sqrt(8) eta) + 1/2))``. Returns ``(A, Npoints)`` with
+    complex/non-finite amplitudes removed.
+    """
     A = []
     Npoints = []
     for L in sets:
-        # FIX (#3): forcedN — subsample to exactly `wanted` points before
-        # computing eta (the notebook's main-loop subsampling referenced
-        # undefined variables; this implements the intent cleanly).
-        if cfg.forced_n and len(L) >= cfg.wanted:
-            iselect = random.sample(range(len(L)), cfg.wanted)
+        # FIX (#3): forcedN — subsample to exactly `wanted` points before eta.
+        if forced_n and len(L) >= wanted:
+            iselect = random.sample(range(len(L)), wanted)
             L = L[iselect]
 
-        if len(L) >= cfg.wanted:
+        if len(L) >= wanted:
             Npoints.append(len(L))
             L2 = np.asarray(L) ** 2.0
             eta = np.std(L2) / np.mean(L2)
-            A_val = np.sqrt(1 - 1 / ((1 / (np.sqrt(8) * eta)) + 0.5))
+            # Argument can go negative for near-spherical/low-variation cases;
+            # the resulting nan is dropped below, so silence the sqrt warning.
+            with np.errstate(invalid="ignore"):
+                A_val = np.sqrt(1 - 1 / ((1 / (np.sqrt(8) * eta)) + 0.5))
             A.append(A_val)
 
     A = np.array(A)
     Npoints = np.asarray(Npoints)
-    Npoints_avg = float(np.mean(Npoints)) if len(Npoints) > 0 else 0
 
     # Remove complex / non-finite amplitudes
     A = A[np.isreal(A)]
     A = A[np.isfinite(A)]
-
-    return Npoints_avg, Nappar, A
+    return A, Npoints
