@@ -100,8 +100,13 @@ def _draw_beta(cfg: SyntheticConfig) -> float:
     return np.pi / 2 * np.random.rand()
 
 
-def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool = False) -> SyntheticResult:
-    """Run one synthetic validation experiment; returns a :class:`SyntheticResult`."""
+def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool = False,
+                  make_plots: bool = True) -> SyntheticResult:
+    """Run one synthetic validation experiment; returns a :class:`SyntheticResult`.
+
+    ``make_plots=False`` skips the per-run figures (the stats file and ``.npz``
+    are still written) — useful when sweeping many seeds.
+    """
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -151,8 +156,9 @@ def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool =
     outdir = cfg.resolved_outdir
     os.makedirs(outdir, exist_ok=True)
 
-    synthetic_plots(result, p_true, beta_true, outdir, stats=stats,
-                    convert2degrees=cfg.convert2degrees, show=show)
+    if make_plots:
+        synthetic_plots(result, p_true, beta_true, outdir, stats=stats,
+                        convert2degrees=cfg.convert2degrees, show=show)
     write_stats_file(
         os.path.join(outdir, "distribution_stats.txt"), stats,
         label=f"synthetic run: p_peak={cfg.p_peak:.3f}, b_peak={cfg.b_peak:.3f} rad "
