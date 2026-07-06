@@ -21,6 +21,7 @@ from .damit import read_damit_model
 from .ellipsoid import ellipsoid_properties
 from .geometry import read_synth_geometry
 from .plots import synthetic_plots
+from .stats import compute_stats, write_stats_file
 
 
 @dataclass
@@ -36,6 +37,7 @@ class SyntheticResult:
     BETA: np.ndarray            # recovered beta grid (radians)
     Pmargin: np.ndarray         # recovered marginal DF of p
     Bmargin: np.ndarray         # recovered marginal DF of beta
+    stats: dict                 # min/max/mean/median, assigned vs recovered, p & beta(deg)
     outdir: str
 
     def save(self, path: str) -> None:
@@ -142,17 +144,26 @@ def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool =
     Pmargin = np.sum(result.W, axis=1)
     Bmargin = np.sum(result.W, axis=0)
 
+    p_true = np.asarray(p_true)
+    beta_true = np.asarray(beta_true)
+    stats = compute_stats(p_true, beta_true, result.P, Pmargin, result.BETA, Bmargin)
+
     outdir = cfg.resolved_outdir
     os.makedirs(outdir, exist_ok=True)
 
-    synthetic_plots(result, np.asarray(p_true), np.asarray(beta_true), outdir,
+    synthetic_plots(result, p_true, beta_true, outdir, stats=stats,
                     convert2degrees=cfg.convert2degrees, show=show)
+    write_stats_file(
+        os.path.join(outdir, "distribution_stats.txt"), stats,
+        label=f"synthetic run: p_peak={cfg.p_peak:.3f}, b_peak={cfg.b_peak:.3f} rad "
+              f"({np.rad2deg(cfg.b_peak):.1f} deg), Ndraws={cfg.Ndraws}",
+    )
 
     res = SyntheticResult(
         p_peak=cfg.p_peak, b_peak=cfg.b_peak,
-        p_true=np.asarray(p_true), beta_true=np.asarray(beta_true),
+        p_true=p_true, beta_true=beta_true,
         inversion=result, P=result.P, BETA=result.BETA,
-        Pmargin=Pmargin, Bmargin=Bmargin, outdir=outdir,
+        Pmargin=Pmargin, Bmargin=Bmargin, stats=stats, outdir=outdir,
     )
     res.save(os.path.join(outdir, "synthetic_result.npz"))
 

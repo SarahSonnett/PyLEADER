@@ -19,9 +19,19 @@ def _normalize(v):
     return v / s if s > 0 else v
 
 
+def _legend(kind, s, fmt):
+    """Legend label with mean/median, e.g. 'recovered  (μ=0.42, med=0.41)'."""
+    return f"{kind}  (μ={s['mean']:{fmt}}, med={s['median']:{fmt}})"
+
+
 def synthetic_plots(result: InversionResult, p_true, beta_true, outdir, *,
-                    convert2degrees=True, show=False):
-    """Write validation + solution plots for one synthetic run into ``outdir``."""
+                    stats=None, convert2degrees=True, show=False):
+    """Write validation + solution plots for one synthetic run into ``outdir``.
+
+    If ``stats`` (from :func:`pyleader.synthetic.stats.compute_stats`) is given,
+    the recovered-vs-assigned marginal plots annotate each distribution's mean
+    and median in the legend.
+    """
     P = result.P
     BETA = result.BETA                       # radians
     W = result.W
@@ -57,12 +67,16 @@ def synthetic_plots(result: InversionResult, p_true, beta_true, outdir, *,
     plt.close()
 
     # --- 3. Recovered vs assigned marginal of p ---
+    p_assigned_lbl, p_recovered_lbl = "assigned (true)", "recovered"
+    if stats is not None:
+        p_assigned_lbl = _legend("assigned (true)", stats["p"]["assigned"], ".2f")
+        p_recovered_lbl = _legend("recovered", stats["p"]["recovered"], ".2f")
     plt.figure()
     plt.hist(p_true, bins=15, range=(0, 1), density=True, alpha=0.5,
-             color="green", label="assigned (true)")
+             color="green", label=p_assigned_lbl)
     width = P[1] - P[0] if len(P) > 1 else 0.05
     plt.bar(P, _normalize(Pmargin) / width, width=width, alpha=0.6,
-            color="tab:blue", label="recovered")
+            color="tab:blue", label=p_recovered_lbl)
     plt.xlabel("p")
     plt.ylabel("normalized DF")
     plt.title("Shape elongation p: recovered vs assigned")
@@ -73,13 +87,18 @@ def synthetic_plots(result: InversionResult, p_true, beta_true, outdir, *,
     plt.close()
 
     # --- 4. Recovered vs assigned marginal of beta ---
+    # Legend mean/median are reported in degrees (from `stats`).
+    b_assigned_lbl, b_recovered_lbl = "assigned (true)", "recovered"
+    if stats is not None:
+        b_assigned_lbl = _legend("assigned (true)", stats["beta_deg"]["assigned"], ".1f")
+        b_recovered_lbl = _legend("recovered", stats["beta_deg"]["recovered"], ".1f")
     plt.figure()
     hi = 90 if convert2degrees else np.pi / 2
     plt.hist(beta_true_plot, bins=16, range=(0, hi), density=True, alpha=0.5,
-             color="green", label="assigned (true)")
+             color="green", label=b_assigned_lbl)
     bwidth = beta_axis[1] - beta_axis[0] if len(beta_axis) > 1 else hi / 16
     plt.bar(beta_axis, _normalize(Bmargin) / bwidth, width=bwidth, alpha=0.6,
-            color="tab:blue", label="recovered")
+            color="tab:blue", label=b_recovered_lbl)
     plt.xlabel(beta_label)
     plt.ylabel("normalized DF")
     plt.title(r"Spin latitude $\beta$: recovered vs assigned")
