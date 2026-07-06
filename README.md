@@ -74,17 +74,22 @@ into one configurable driver: `_bg` is `--population background`, and `_forcedN`
 ## Install
 
 ```sh
-pip install -r requirements.txt
+pip install -e .            # editable install from a checkout
+pip install -e ".[obs]"     # also install the .obs-building deps
 ```
 
-The analysis path needs only `numpy`/`scipy`/`matplotlib`. Building `.obs` files additionally
-requires `astropy`/`sunpy`/`requests` and internet access.
+Core deps are `numpy`/`scipy`/`matplotlib`; the `[obs]` extra adds `astropy`/`sunpy`/`requests`
+(needed only for building `.obs` files, which also requires internet access). Installing puts
+console commands on your `PATH` (one per script): `pyleader-analysis`, `pyleader-build-obs`,
+`pyleader-synthetic`, `pyleader-compare`, `pyleader-sweep`, `pyleader-plot-sweep`,
+`pyleader-fit-correction`.
 
-The package is currently run from a source checkout (via `PYTHONPATH`), not installed. If you
-later add a proper build (`pyproject.toml`), the shipped correction data
-(`pyleader/synthetic/data/correction_function.json`) must be declared as **package data** so it
-is included in wheels — otherwise `default_correction()` will fail on an installed copy. See
-[TODO.md](TODO.md).
+You can also run without installing, straight from a source checkout — every `pyleader-<name>`
+command has an equivalent `python scripts/<name>.py`. The examples below use the `python scripts/…`
+form; substitute the installed command if you prefer.
+
+> The bundled bias correction (`pyleader/synthetic/data/correction_function.json`) is declared as
+> package data in `pyproject.toml`, so `default_correction()` works from an installed copy too.
 
 ## Usage
 

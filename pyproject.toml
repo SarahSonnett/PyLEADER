@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyleader"
+version = "0.1.0"
+description = "Python port of the LEADER method: asteroid shape-elongation and spin-latitude distributions from WISE/NEOWISE photometry"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Sarah Sonnett", email = "ssonnett@psi.edu" }]
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+# Building .obs input files (pyleader.obsfiles) queries IRSA + JPL Horizons.
+obs = ["astropy", "sunpy", "requests"]
+
+[project.urls]
+Repository = "https://github.com/SarahSonnett/PyLEADER"
+
+[project.scripts]
+pyleader-analysis        = "pyleader.cli.run_analysis:main"
+pyleader-build-obs       = "pyleader.cli.build_obs_files:main"
+pyleader-synthetic       = "pyleader.cli.run_synthetic:main"
+pyleader-compare         = "pyleader.cli.compare_populations:main"
+pyleader-sweep           = "pyleader.cli.sweep_synthetic:main"
+pyleader-plot-sweep      = "pyleader.cli.plot_sweep:main"
+pyleader-fit-correction  = "pyleader.cli.fit_correction:main"
+
+[tool.setuptools.packages.find]
+include = ["pyleader*"]
+
+[tool.setuptools.package-data]
+# Ship the canonical bias correction so default_correction() works when installed.
+"pyleader.synthetic" = ["data/*.json"]

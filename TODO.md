@@ -2,26 +2,25 @@
 
 ## Packaging
 
-The package currently runs from a source checkout (the CLIs insert the repo root on
-`sys.path`, and imports resolve via `PYTHONPATH`). There is no build system yet. When adding one:
+A `pyproject.toml` (setuptools) is now in place. Done:
 
-- [ ] Add a `pyproject.toml` (e.g. setuptools or hatchling) with project metadata and dependencies
-      (mirror `requirements.txt`: core = numpy/scipy/matplotlib; extras for obs-building =
-      astropy/sunpy/requests).
-- [ ] **Include the shipped correction data as package data.** The file
-      `pyleader/synthetic/data/correction_function.json` is loaded at runtime by
-      `pyleader.synthetic.correction.default_correction()`. It is **not** Python, so it will be
-      omitted from wheels unless explicitly declared. Without it, `default_correction()` raises
-      `FileNotFoundError` on an installed copy.
-    - setuptools: set `[tool.setuptools.package-data]` `pyleader.synthetic = ["data/*.json"]`
-      (or `include-package-data = true` + a `MANIFEST.in` with
-      `recursive-include pyleader/synthetic/data *.json`).
-    - hatchling: ensure `pyleader/synthetic/data/*.json` is under `[tool.hatch.build] include`.
-    - Consider loading it via `importlib.resources` instead of a filesystem path so it also works
-      from zipped installs.
-- [ ] Expose the CLIs as console entry points (`run_analysis`, `build_obs_files`, `run_synthetic`,
-      `compare_populations`, `sweep_synthetic`, `plot_sweep`, `fit_correction`) so users don't need
-      `python scripts/...`.
+- [x] `pyproject.toml` with project metadata + dependencies (core = numpy/scipy/matplotlib;
+      `[obs]` extra = astropy/sunpy/requests).
+- [x] **Correction data shipped as package data** — `[tool.setuptools.package-data]`
+      `"pyleader.synthetic" = ["data/*.json"]`, so `default_correction()` works from an installed
+      copy. Verified: the built wheel contains `correction_function.json` and a clean-venv install
+      loads it. The CLI logic lives in `pyleader/cli/*` (importable/shippable); `scripts/*.py` are
+      thin source-tree shims.
+- [x] Console entry points (`pyleader-analysis`, `pyleader-build-obs`, `pyleader-synthetic`,
+      `pyleader-compare`, `pyleader-sweep`, `pyleader-plot-sweep`, `pyleader-fit-correction`).
+
+Remaining / nice-to-have:
+
+- [ ] Switch `default_correction()` from a filesystem path to `importlib.resources` so it also
+      works from zipped (non-extracted) installs.
+- [ ] Set `version` dynamically from `pyleader.__version__` instead of duplicating it in
+      `pyproject.toml`.
+- [ ] Publish (tag + build sdist/wheel) if distributing beyond source checkouts.
 
 ## Data (not committed; regenerable)
 
