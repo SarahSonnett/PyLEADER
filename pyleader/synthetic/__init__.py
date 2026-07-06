@@ -14,6 +14,12 @@ from __future__ import annotations
 from .config import SyntheticConfig
 from .population import run_synthetic, SyntheticResult
 from .compare import ks_comparison, compare_populations
+from .correction import (
+    apply_correction,
+    default_correction,
+    fit_from_csv,
+    load_correction,
+)
 
 __all__ = [
     "SyntheticConfig",
@@ -21,4 +27,8 @@ __all__ = [
     "SyntheticResult",
     "ks_comparison",
     "compare_populations",
+    "apply_correction",
+    "default_correction",
+    "fit_from_csv",
+    "load_correction",
 ]

@@ -20,10 +20,15 @@ from __future__ import annotations
 import csv
 import datetime as _dt
 import json
+import os
 
 import numpy as np
 
 TERMS = ["1", "p", "b", "p^2", "p*b", "b^2"]
+
+# Canonical correction shipped with the package (fit from a 20x3 synthetic
+# sweep; regenerate with scripts/fit_correction.py on your own sweep).
+_DEFAULT_CORRECTION = os.path.join(os.path.dirname(__file__), "data", "correction_function.json")
 
 
 def _design(p, b):
@@ -109,3 +114,12 @@ def save_correction(coeffs: dict, path: str) -> None:
 def load_correction(path: str) -> dict:
     with open(path) as f:
         return json.load(f)
+
+
+def default_correction() -> dict:
+    """Load the canonical correction shipped with the package.
+
+    Regenerate it for your own sweep with ``scripts/fit_correction.py`` and pass
+    the resulting JSON to :func:`load_correction` instead.
+    """
+    return load_correction(_DEFAULT_CORRECTION)

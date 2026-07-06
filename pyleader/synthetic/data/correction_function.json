@@ -1,0 +1,47 @@
+{
+  "direction": "recovered -> true (apply to LEADER results on real data)",
+  "stat": "mean",
+  "beta_units": "degrees",
+  "terms": [
+    "1",
+    "p",
+    "b",
+    "p^2",
+    "p*b",
+    "b^2"
+  ],
+  "coeffs_p_true": [
+    1.1267691263976876,
+    0.4416347812895255,
+    -0.025531732157606728,
+    -0.28860016436124325,
+    0.0156461179539238,
+    9.987826712887227e-05
+  ],
+  "coeffs_b_true": [
+    -228.04292553072335,
+    -68.46866185908195,
+    8.452586035139461,
+    -86.29755765624905,
+    2.46848708687755,
+    -0.0644225240432803
+  ],
+  "diagnostics": {
+    "n": 60,
+    "r2_p": 0.9547897203530504,
+    "rmse_p": 0.022598188609014896,
+    "r2_b": 0.9151541572213139,
+    "rmse_b": 5.197326556976718,
+    "p_rec_range": [
+      0.2094063766474607,
+      0.6570817684573167
+    ],
+    "b_rec_range": [
+      42.64198445355543,
+      65.23251905509267
+    ]
+  },
+  "caveat": "The recovered beta range is compressed relative to the true range, so the beta correction is poorly constrained and extrapolates outside b_rec_range; treat corrected beta as indicative, not precise.",
+  "source_csv": "/Users/ssonnett/synthetic_sweep/sweep_stats.csv",
+  "generated_utc": "2026-07-06T20:33:36Z"
+}

@@ -80,6 +80,12 @@ pip install -r requirements.txt
 The analysis path needs only `numpy`/`scipy`/`matplotlib`. Building `.obs` files additionally
 requires `astropy`/`sunpy`/`requests` and internet access.
 
+The package is currently run from a source checkout (via `PYTHONPATH`), not installed. If you
+later add a proper build (`pyproject.toml`), the shipped correction data
+(`pyleader/synthetic/data/correction_function.json`) must be declared as **package data** so it
+is included in wheels — otherwise `default_correction()` will fail on an installed copy. See
+[TODO.md](TODO.md).
+
 ## Usage
 
 ### Run the analysis
@@ -136,6 +142,45 @@ a `synthetic_result.npz` for later comparison. The Hapke scattering law is avail
 
 > DAMIT models are fetched from the DAMIT database; if you use them, please cite
 > Ďurech et al. (2010) and the original papers for the individual shape models.
+
+### Synthetic sweep & bias correction
+
+To characterize LEADER's bias across the parameter space, sweep a grid of assigned
+`(p_peak, β_peak)` with several random realizations (seeds) per grid point:
+
+```sh
+python scripts/sweep_synthetic.py \
+    --p-peaks 0.35 0.45 0.55 0.65 0.75 --b-peaks 0.2 0.5 0.9 1.3 \
+    --ndraws 1000 --nseeds 3 --seed 0 --outdir ~/synthetic_sweep
+```
+
+This writes `sweep_stats.csv` (one row per grid-point × seed, with min/max/mean/median of the
+assigned and recovered `p` and `β` distributions) and `sweep_summary.png` — a 2-panel figure of
+recovered vs. assigned means as a function of each input parameter, with ±1σ error bars over the
+seeds. (`scripts/plot_sweep.py <csv>` re-renders that figure from any sweep CSV.)
+
+Then fit a **bias-correction function** that maps what LEADER *recovers* back to the *true* value,
+for application to real-data results:
+
+```sh
+python scripts/fit_correction.py ~/synthetic_sweep/sweep_stats.csv
+```
+
+This records `correction_function.json` (2D-quadratic coefficients + fit diagnostics) and a
+predicted-vs-true `correction_fit.png`. Apply it to real LEADER output:
+
+```python
+from pyleader.synthetic import default_correction, load_correction, apply_correction
+
+corr = default_correction()                      # the correction shipped with the package
+# corr = load_correction("correction_function.json")   # or your own fit
+p_true, beta_true = apply_correction(p_recovered, beta_recovered_deg, corr)
+```
+
+The shipped correction (from a 20×3 sweep) fits `p` well (R²≈0.95) and `β` reasonably (R²≈0.92);
+because the recovered `β` range is compressed, the `β` correction extrapolates outside the sampled
+range and should be treated as indicative. Regenerate it for your own configuration with
+`scripts/fit_correction.py`.
 
 ### As a library
 
