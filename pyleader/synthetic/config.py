@@ -6,7 +6,8 @@ of the MATLAB ``leader_synth_main_WISE.m`` and its helpers.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from ..config import DEFAULT_BASE_DIR
@@ -14,6 +15,11 @@ from ..config import DEFAULT_BASE_DIR
 # Location of the original MATLAB LEADER release, which ships the example DAMIT
 # model listing (asteroideja.txt) and a subset of WISE geometry .obs files.
 _LEADER_MASTER = f"{DEFAULT_BASE_DIR}/LEADER-master"
+
+# Repository root (pyleader/synthetic/config.py -> PyLEADER/). The downloaded
+# DAMIT shape models live in <repo>/damit_models so all inputs are centralized.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_DAMIT_MODELS_DIR = os.path.join(_REPO_ROOT, "damit_models")
 
 
 @dataclass
@@ -58,7 +64,7 @@ class SyntheticConfig:
 
     # --- data paths ---
     damit_list: str = f"{_LEADER_MASTER}/asteroideja.txt"
-    damit_dir: str = f"{DEFAULT_BASE_DIR}/damit_models"
+    damit_dir: str = _DAMIT_MODELS_DIR
     geometry_dir: str = f"{_LEADER_MASTER}/WISE_3band_subset/WISE/WISE_3band/obs"
     base_dir: str = DEFAULT_BASE_DIR
     outdir: Optional[str] = None             # defaults via `resolved_outdir`

@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# DAMIT shape models (regenerable via scripts/run_synthetic.py --download; ~29 MB)
+/damit_models/
