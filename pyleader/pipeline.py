@@ -105,6 +105,21 @@ class PopulationResult:
     r2: tuple                       # (r2_p, r2_beta) of the correction fit
 
 
+def _require_damit_models() -> None:
+    """Fail early (before the analysis) with actionable guidance if models are absent."""
+    import glob
+    from .synthetic.config import SyntheticConfig
+    scfg = SyntheticConfig()
+    if not glob.glob(os.path.join(scfg.damit_dir, "*.txt")):
+        raise FileNotFoundError(
+            f"No DAMIT shape models in {scfg.damit_dir} — the per-population correction "
+            "needs them. Fetch them once with:\n"
+            "    pyleader-download-models        (or: python scripts/download_models.py)\n"
+            "then re-run. Or pass --refresh-models / run_population(..., refresh_models=True) "
+            "to download the latest versions now."
+        )
+
+
 def _recovered_peak(analysis_outdir: str, pop_id: str):
     """Average LEADER peak (pmax, betamax_deg) across trials from the summary file."""
     summary = os.path.join(analysis_outdir, f"SummaryAnalysis_Famid{pop_id}.txt")
@@ -122,12 +137,14 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     """
     acfg = cfg.analysis_config()
 
-    # 0. optionally refresh the DAMIT shape models
+    # 0. optionally refresh the DAMIT shape models, else ensure they exist
     if refresh_models:
         from .synthetic.config import SyntheticConfig
         from .synthetic.damit import download_damit_models, parse_model_list
         scfg = SyntheticConfig()
         download_damit_models(parse_model_list(scfg.damit_list), scfg.damit_dir, force=True)
+    else:
+        _require_damit_models()
 
     # 1. build .obs (optional; needs network + astropy/sunpy)
     if do_build:
