@@ -147,7 +147,7 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
         from .synthetic.config import SyntheticConfig
         from .synthetic.damit import download_damit_models, parse_model_list
         scfg = SyntheticConfig()
-        download_damit_models(parse_model_list(scfg.damit_list), scfg.damit_dir, force=True)
+        download_damit_models(parse_model_list(scfg.damit_list), scfg.damit_dir, refresh=True)
     else:
         _require_damit_models()
 

@@ -35,7 +35,7 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     numbers = parse_model_list(args.damit_list)
     print(f"{len(numbers)} models listed in {args.damit_list}")
-    ok = download_damit_models(numbers, args.damit_dir, force=args.refresh)
+    ok = download_damit_models(numbers, args.damit_dir, refresh=args.refresh)
     print(f"{len(ok)}/{len(numbers)} models available in {args.damit_dir}")
     return 0
 

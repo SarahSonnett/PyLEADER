@@ -144,8 +144,8 @@ photometry, and writes one `.obs` file per object (photometry + Sun/observer geo
   - `AllMBAFamilyMembers.txt` (families) or `BGobjs_<REGION>_<TYPE>type_neowise.txt` (backgrounds)
   - plus `neowise_mainbelt.csv`.
 - **Arguments:** 
-`--famid ID` *(required)*; 
-`--population {family,background}` *(default inferred)*;
+`--famid ID` integer ID number for the family being analyzed, if not a background subpopulation *(required)*; 
+`--population {family,background}` specify the type of population being analyzed *(default inferred)*;
 `--cat CATALOG` IRSA catalog *(default* `allsky_4band_p1bs_psd`*)*; 
 `--filterpriority {w2,w3}`*(default* `w3`*)*; 
 `--min-obs N` minimum points to keep an object *(int ≥ 1, default 5)*;
