@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--base-dir", default=d.base_dir, help="root working directory for inputs/outputs")
     p.add_argument("--population", dest="population_kind", choices=("family", "background"),
                    default=d.population_kind, help="directory-naming scheme / membership source")
-    p.add_argument("--datadir", default=None,
+    p.add_argument("--obsdir", default=None,
                    help="write .obs files to this exact directory (bypasses the naming convention)")
     p.add_argument("--legacy-format", action="store_true", default=d.legacy_format,
                    help="write .obs in the legacy block format instead of the default tabular format")
@@ -58,7 +58,7 @@ def main(argv=None) -> int:
         neowise_fle=args.neowise_fle,
         base_dir=args.base_dir,
         population_kind=args.population_kind,
-        data_dir_override=args.datadir,
+        obsdir=args.obsdir,
         legacy_format=args.legacy_format,
     )
 

@@ -131,21 +131,21 @@ The pipeline flows in stages. `pyleader-population` runs stages **2–5** in one
   `--cat CATALOG` IRSA catalog *(default `allsky_4band_p1bs_psd`)*; `--filterpriority {w2,w3}`
   *(default `w3`)*; `--min-obs N` minimum points to keep an object *(int ≥ 1, default 5)*;
   `--legacy-format` write the old block format *(optional; default tabular)*;
-  `--datadir DIR` write the `.obs` files to an exact directory instead of the derived path.
-- **Output:** `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/*.obs` (or `--datadir` if given).
+  `--obsdir DIR` write the `.obs` files to an exact directory instead of the derived path.
+- **Output:** `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/*.obs` (or `--obsdir` if given).
 
 ### Stage 2 — Recover the distributions  (`pyleader-analysis`)
 
 - **What it does:** runs the LEADER inversion over `Ntrials` random draws of the population and writes
   the recovered `(p, β)` distributions with their trial-to-trial spread.
 - **Input:** the population's `.obs` directory (from Stage 1) + `neowise_mainbelt.csv` for diameters.
-  The directory is derived as `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/`; use `--datadir DIR` to
+  The directory is derived as `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/`; use `--obsdir DIR` to
   read from an exact directory that doesn't follow this naming.
 - **Arguments:** `--famid ID` *(required)*; `--diam-low` / `--diam-high` diameter window in km
   *(≥ 0, low < high; default 5–10)*; `--ntrials N` *(int ≥ 1, default 100)*; `--ndraws N` objects per
   trial *(int ≥ 1, default 1000)*; `--phase-angle-limit DEG` max solar phase angle *(0–90, default
   40)*; `--wanted N` min points per apparition *(int ≥ 3, default 5)*; `--date-tol DAYS` apparition
-  gap *(> 0, default 60)*; `--population {family,background}`; `--datadir DIR` read `.obs` from an
+  gap *(> 0, default 60)*; `--population {family,background}`; `--obsdir DIR` read `.obs` from an
   exact directory; `--forced-n` subsample each object to `wanted` amplitudes; `--overwrite`; `--seed N`.
 - **Output:** `<...>_analysis_<...>_<lo>km_to_<hi>km/` with `SummaryAnalysis_*.txt`, per-`Trial*/`
   diagnostics, and `Summary_pmax/betamax_*.png`.
@@ -212,7 +212,7 @@ pyleader-population BG_IB_Ctypes --build
   (`--diam-low/-high`, `--ntrials`, `--ndraws`, `--phase-angle-limit`, `--date-tol`, `--wanted`); the
   Stage-3 sweep options (`--p-peaks`, `--b-peaks`, `--sweep-ndraws`, `--nseeds`, `--scattering`);
   `--correction-stat {peak,mean,median}` *(default `peak`)*; `--build`; `--refresh-models`
-  re-download the latest DAMIT models first; `--base-dir PATH`; `--datadir DIR` read/write `.obs`
+  re-download the latest DAMIT models first; `--base-dir PATH`; `--obsdir DIR` read/write `.obs`
   from an exact directory (the correction sweep's geometry follows it); `--seed N`.
 - **Output:** the analysis directory plus `correction_sweep/`, the population-specific
   `correction_function.json` + `correction_fit.png`, and `population_report.txt` (recovered → corrected

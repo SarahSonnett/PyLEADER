@@ -61,7 +61,7 @@ class AnalysisConfig:
     # Point the analysis at an arbitrary directory of .obs files, bypassing the
     # base_dir/<token>_data_<cat>_<filter> naming convention. When None the
     # directory is derived from the fields above (the usual case).
-    datadir_override: Optional[str] = None
+    obsdir: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.population_kind not in ("family", "background"):
@@ -84,11 +84,11 @@ class AnalysisConfig:
     def datadir(self) -> str:
         """Directory of input ``.obs`` files.
 
-        Returns ``datadir_override`` when set, otherwise the conventional
+        Returns ``obsdir`` when set, otherwise the conventional
         ``base_dir/<token>_data_<cat>_<filter>/`` path.
         """
-        if self.datadir_override is not None:
-            return self.datadir_override
+        if self.obsdir is not None:
+            return self.obsdir
         return (
             f"{self.base_dir}/{self._famtoken}_data_"
             f"{self.cat}_{self.filterpriority}/"
@@ -146,7 +146,7 @@ class ObsBuildConfig:
     base_dir: str = DEFAULT_BASE_DIR
 
     # Write .obs into an arbitrary directory, bypassing the naming convention.
-    data_dir_override: Optional[str] = None
+    obsdir: Optional[str] = None
 
     @property
     def _poptoken(self) -> str:
@@ -156,8 +156,8 @@ class ObsBuildConfig:
     @property
     def data_dir(self) -> str:
         """Directory the ``.obs`` files are written to (matches ``AnalysisConfig.datadir``)."""
-        if self.data_dir_override is not None:
-            return self.data_dir_override
+        if self.obsdir is not None:
+            return self.obsdir
         return f"{self.base_dir}/{self._poptoken}_data_{self.cat}_{self.filterpriority}"
 
     @property

@@ -62,7 +62,7 @@ class PopulationConfig:
     base_dir: str = None
     # Arbitrary .obs directory (bypasses the naming convention). Used for both
     # building (Stage 1) and reading (Stage 2), and the sweep geometry follows.
-    datadir: Optional[str] = None
+    obsdir: Optional[str] = None
 
     def __post_init__(self):
         if self.population_kind is None:
@@ -79,14 +79,14 @@ class PopulationConfig:
             date_tol=self.date_tol, wanted=self.wanted, overwrite=self.overwrite,
             convert2degrees=self.convert2degrees, neowise_fle=self.neowise_fle,
             population_kind=self.population_kind, base_dir=self.base_dir,
-            datadir_override=self.datadir,
+            obsdir=self.obsdir,
         )
 
     def obs_config(self) -> ObsBuildConfig:
         return ObsBuildConfig(
             famid=self.pop_id, cat=self.cat, filterpriority=self.filterpriority,
             population_kind=self.population_kind, neowise_fle=self.neowise_fle,
-            base_dir=self.base_dir, data_dir_override=self.datadir,
+            base_dir=self.base_dir, obsdir=self.obsdir,
         )
 
     def synthetic_base(self, geometry_files) -> SyntheticConfig:

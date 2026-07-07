@@ -50,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scattering", choices=("ls_lambert", "hapke"), default=d.scattering)
     p.add_argument("--correction-stat", choices=("peak", "mean", "median"), default=d.correction_stat)
     p.add_argument("--base-dir", default=None)
-    p.add_argument("--datadir", default=None,
+    p.add_argument("--obsdir", default=None,
                    help="read/write .obs from this exact directory (bypasses the naming convention); "
                         "the correction sweep's geometry follows it")
     p.add_argument("--build", action="store_true", help="query NEOWISE and write .obs first")
@@ -68,7 +68,7 @@ def main(argv=None) -> int:
         Ntrials=a.ntrials, Ndraws=a.ndraws, phase_angle_limit=a.phase_angle_limit,
         date_tol=a.date_tol, wanted=a.wanted, p_peaks=tuple(a.p_peaks), b_peaks=tuple(a.b_peaks),
         sweep_ndraws=a.sweep_ndraws, nseeds=a.nseeds, scattering=a.scattering,
-        correction_stat=a.correction_stat, base_dir=a.base_dir, datadir=a.datadir,
+        correction_stat=a.correction_stat, base_dir=a.base_dir, obsdir=a.obsdir,
     )
     res = run_population(cfg, do_build=a.build, refresh_models=a.refresh_models, seed=a.seed)
     print(f"\nDone. Report + correction in: {res.outdir}")
