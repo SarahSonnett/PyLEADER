@@ -111,7 +111,7 @@ The pipeline flows in steps. `pyleader-population` runs steps **2–5** in one c
    └── pyleader-population wraps [2]–[5] (and [1] with --build) ──┘
 ```
 
-### step 0 — Fetch DAMIT shape models  (`pyleader-download-models`)
+### Step 0 — Fetch DAMIT shape models  (`pyleader-download-models`)
 
 - **What it does:** downloads the representative DAMIT shape models the synthetic step needs. Run
   once after cloning. The model *listing* (`asteroideja.txt`) ships with the package; the models
@@ -121,7 +121,7 @@ The pipeline flows in steps. `pyleader-population` runs steps **2–5** in one c
   default fetches only missing ones)*; `--damit-dir PATH` destination *(default `damit_models/`)*.
 - **Output:** `<number>.txt` shape files in `damit_models/`.
 
-### step 1 — Build `.obs` files  (`pyleader-build-obs`, or `pyleader-population --build`)
+### Step 1 — Build `.obs` files  (`pyleader-build-obs`, or `pyleader-population --build`)
 
 - **What it does:** resolves the population to its member objects, queries NEOWISE @ IPAC for clean
   photometry, and writes one `.obs` file per object (photometry + Sun/observer geometry per point).
