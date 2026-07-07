@@ -255,12 +255,20 @@ distributions over all trials, each with a Gaussian fit giving the population va
 **Per-population bias correction.** Running the full pipeline on this dataset
 
 ```sh
-pyleader-population 10 --diam-low 3 --diam-high 5 --ntrials 30
+pyleader-population 10 --diam-low 3 --diam-high 5 --ntrials 100 --nseeds 3
 ```
 
-derives a correction from Hygiea's *own* observing geometry — a synthetic `(p_peak, β_peak)` sweep
-(20 grid points) observed at the family's cadence, fit as a recovered→true mapping. The fit recovers
-the assigned peaks well (R² = 0.944 for `p`, 0.929 for `β`):
+derives a correction from Hygiea's *own* observing geometry: a synthetic `(p_peak, β_peak)` sweep
+(20 grid points × 3 seeds) observed at the family's cadence. The **sweep summary** shows how LEADER's
+recovered means (colored, ±1σ over seeds) depart from the assigned truth (dashed) as a function of
+each input parameter — making the direction of the bias and the `p`–`β` interdependence explicit:
+
+![Hygiea sweep summary: recovered vs assigned p and beta](docs/images/Hygiea_sweep_summary.png)
+
+`p` is recovered biased low everywhere, and by *more* at low spin latitude (the blue `β_peak=11°`
+curve sits farthest below the diagonal); `β` is compressed toward mid-range (over-estimated below
+~50°, under-estimated above), nearly independent of `p_peak`. Fitting a recovered→true mapping to
+these points recovers the assigned peaks well (R² = 0.93 for both `p` and `β`):
 
 ![Hygiea correction fit: corrected vs true p and beta](docs/images/Hygiea_correction_fit.png)
 
@@ -268,14 +276,12 @@ Applying it de-biases the LEADER result for the population (`population_report.t
 
 | quantity | recovered | corrected |
 |---|---|---|
-| `p` | 0.503 | **0.610** |
-| `β` (deg) | 30.3 | **2.6** |
+| `p` | 0.497 | **0.642** |
+| `β` (deg) | 30.4 | **3.1** |
 
-As expected from the method, `p` is corrected upward (LEADER recovers it biased low), and `β` — only
-weakly constrained by amplitudes and near the low edge of the synthetic recovered range here — shifts
-toward the pole; the report flags such near/out-of-range cases as uncertain. *(This example uses a
-reduced configuration — 30 trials, a single-seed 20-point sweep — for speed; production runs would use
-more trials and seeds.)*
+As the sweep predicts, `p` is corrected upward, and `β` — only weakly constrained by amplitudes and
+here near the low edge of the synthetic recovered range (`β_rec ∈ [28°, 90°]`) — shifts toward the
+pole; the report flags such near/out-of-range cases as uncertain.
 
 
 

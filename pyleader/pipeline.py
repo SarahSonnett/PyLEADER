@@ -13,6 +13,7 @@ geometry, it is bespoke to the dataset — the scientifically appropriate choice
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -163,6 +164,11 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     base_syn = cfg.synthetic_base(geom)
     sweep_csv = run_sweep(base_syn, cfg.p_peaks, cfg.b_peaks,
                           nseeds=cfg.nseeds, seed=(seed or 0), outdir=sweep_dir, verbose=False)
+
+    # surface the recovered-vs-assigned summary figure at the top of the output dir
+    summary_src = os.path.join(sweep_dir, "sweep_summary.png")
+    if os.path.exists(summary_src):
+        shutil.copy(summary_src, os.path.join(outdir, "sweep_summary.png"))
 
     # 4. fit the population-specific correction
     coeffs = fit_from_csv(sweep_csv, stat=cfg.correction_stat)
