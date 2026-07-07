@@ -1,37 +1,35 @@
 # PyLEADER
 
-A Python version of the LEADER package (originally written in MATLAB; Nortunen & Kaasalainen 2017),
-with a few enhancements for diagnostics and error determination. PyLEADER derives the
-distributions of asteroid shape elongation (`p`) and spin-axis latitude (`beta`) for a
-population from WISE/NEOWISE thermal photometry.
+A Python version of the **LEADER** method (originally MATLAB; Nortunen & Kaasalainen 2017), with
+enhancements for diagnostics, error determination, and per-population bias correction. PyLEADER
+recovers the distributions of asteroid **shape elongation** (`p`) and **spin-axis latitude** (`β`)
+for a whole population from WISE/NEOWISE thermal photometry.
 
 Give it a **dynamical population ID** — a Nesvorný collisional family or a background main-belt
-population — and the end-to-end driver queries NEOWISE, runs LEADER, derives a correction function
-from *that population's own observing geometry*, and applies it:
+population — and the end-to-end driver queries NEOWISE, writes one `.obs` file per object, runs
+LEADER, derives a correction function from *that population's own observing geometry*, and applies
+it:
 
 ```sh
-python scripts/run_population.py 1128            # a collisional family
-python scripts/run_population.py BG_IB_Ctypes    # a background population (add --build to fetch .obs)
+pyleader-population 1128            # a collisional family
+pyleader-population BG_IB_Ctypes    # a background population (add --build to fetch photometry)
 ```
 
-Because each population's `.obs` files have different cadence/geometry, the correction is bespoke to
-the dataset (see [Per-population pipeline](#per-population-pipeline)). The individual stages
-(obs-building, analysis, synthetic validation, correction) also remain available as separate commands.
+Every stage is also available as a standalone command (see [Usage](#usage)).
 
 ## How it works
 
-PyLEADER implements the **LEADER** method (*Latitudes and Elongations of Asteroid
-Distributions Estimated Rapidly*) of Nortunen & Kaasalainen (2017). For large, sparsely
-sampled populations, inverting individual lightcurves is infeasible — so instead of solving
-for one object at a time, LEADER recovers the **joint distribution of shape elongation `p`
-and spin-axis latitude `β` for the whole population** from the statistics of brightness
-variations. Each object is modeled as a triaxial ellipsoid with axes `a ≥ b = c`; the shape
-elongation is `p = b/a ∈ (0, 1]` (`p = 1` is a sphere), and `β` is the spin-axis latitude
-relative to the ecliptic.
+PyLEADER implements the **LEADER** method (*Latitudes and Elongations of Asteroid Distributions
+Estimated Rapidly*) of Nortunen & Kaasalainen (2017). For large, sparsely sampled populations,
+inverting individual lightcurves is infeasible — so instead of solving for one object at a time,
+LEADER recovers the **joint distribution of shape elongation `p` and spin-axis latitude `β` for the
+whole population** from the statistics of brightness variations. Each object is modeled as a triaxial
+ellipsoid with axes `a ≥ b = c`; the shape elongation is `p = b/a ∈ (0, 1]` (`p = 1` is a sphere),
+and `β` is the spin-axis latitude relative to the ecliptic.
 
-**1. Per object — brightness amplitude.** For each apparition, from the phase-corrected
-intensities `L` we compute the brightness-dispersion statistic and convert it to an
-amplitude `A` (Eq. 7 of Nortunen & Kaasalainen 2017):
+**1. Per object — brightness amplitude.** For each apparition, from the phase-corrected intensities
+`L` we compute the brightness-dispersion statistic and convert it to an amplitude `A`
+(Eq. 7 of Nortunen & Kaasalainen 2017):
 
 $$\eta = \frac{\Delta(L^2)}{\langle L^2\rangle}, \quad \Delta(L^2)=\sqrt{\big\langle (L^2-\langle L^2\rangle)^2\big\rangle}, \qquad A = \sqrt{1 - \dfrac{1}{\dfrac{1}{\sqrt{8}\,\eta} + \tfrac{1}{2}}}$$
 
@@ -39,267 +37,272 @@ In the code this is `eta = std(L**2)/mean(L**2)` and the `A` formula in
 [`lightcurve.py`](pyleader/lightcurve.py).
 
 **2. Population — forward model.** Pooling `A` over all sampled objects gives the cumulative
-distribution `C(A)`. LEADER writes it as a weighted sum of analytic basis functions
-`F_ij` over a grid of `(p_i, β_j)` bins, which is a linear system in the **occupation numbers**
-`w_ij` (the unnormalized joint distribution of `p` and `β`):
+distribution `C(A)`. LEADER writes it as a weighted sum of analytic basis functions `F_ij` over a
+grid of `(p_i, β_j)` bins, a linear system in the **occupation numbers** `w_ij` (the unnormalized
+joint distribution of `p` and `β`):
 
 $$C(A) = \sum_{i,j} w_{ij}\, F_{ij}(A; p_i, \beta_j) \;\equiv\; M\mathbf{w}$$
 
 The matrix `M` is assembled in [`inversion.py`](pyleader/inversion.py).
 
-**3. Population — regularized inversion.** The weights are recovered by non-negative least
-squares with smoothness operators `R_p`, `R_β` that penalize sharp gradients in the `p` and
-`β` directions (strengths `δ_p`, `δ_β`):
+**3. Population — regularized inversion.** The weights are recovered by non-negative least squares
+with smoothness operators `R_p`, `R_β` that penalize sharp gradients in the `p` and `β` directions
+(strengths `δ_p`, `δ_β`):
 
 $$\min_{\mathbf{w}\,\ge\,0} \left\lVert \tilde{M}\mathbf{w} - \tilde{C} \right\rVert, \qquad \tilde{M} = \begin{bmatrix} M \\\\ \sqrt{\delta_p}\,R_p \\\\ \sqrt{\delta_\beta}\,R_\beta \end{bmatrix}$$
 
 solved with SciPy's `lsq_linear` under the positivity bound `w ≥ 0`. The peak of `w` gives the
-population's most likely `(p, β)`; repeating the whole experiment over many random draws of the
-sample (the *trials*) yields the spread used for error determination — the Gaussian-fit summary
-histograms shown below. This per-trial error determination and the accompanying diagnostics are
-the enhancements added here, used in Sonnett, Lilly & Grav (2025).
+population's most likely `(p, β)`; repeating the experiment over many random draws of the sample
+(the *trials*) yields the spread used for error determination.
 
-## Repo contents
-
-The science is now a modular `pyleader` package (the original notebooks are kept for reference):
-
-```
-pyleader/
-  config.py        AnalysisConfig / ObsBuildConfig (replaces the notebook "top cell")
-  pipeline.py      PopulationConfig + run_population(): the end-to-end per-population driver
-  populations.py   resolve a family / background ID to its member objects
-  obsio.py         read/write .obs files (auto-detects tabular or legacy block format)
-  naming.py        designation conversions (analysis side)
-  lightcurve.py    read & phase-correct .obs files -> amplitudes  (lcg_read_WISE)
-  inversion.py     linear inversion for (p, beta) occupation numbers  (leader_invert)
-  postprocess.py   solution smoothing  (leader_postprocess_WISE)
-  plotting.py      per-trial and summary plots
-  analysis.py      run_analysis(): the main experiment driver
-  obsfiles/        build .obs input files from IRSA + JPL Horizons
-  synthetic/       synthetic validation + bias correction (from DAMIT models)
-scripts/
-  run_population.py       CLI for the end-to-end per-population pipeline
-  run_analysis.py         CLI for the analysis
-  build_obs_files.py      CLI for building .obs input files
-  run_synthetic.py        CLI for a synthetic validation run
-  sweep_synthetic.py      CLI to sweep the synthetic validation over a (p, beta) grid
-  fit_correction.py       CLI to fit a bias-correction function from a sweep
-  compare_populations.py  CLI to compare two recovered p/beta distributions
-```
-
-The three original analysis notebooks (`LEADER_python_final`, `_bg`, `_forcedN`) are unified
-into one configurable driver: `_bg` is `--population background`, and `_forcedN` is `--forced-n`.
+**4. Bias correction (this package's main addition).** LEADER's recovered `(p, β)` is biased, and the
+bias depends on the observing geometry — so it differs from dataset to dataset. PyLEADER therefore
+derives a **per-population correction**: it builds synthetic populations of known `(p, β)` observed
+at the *same population's* cadence/geometry, measures how LEADER recovers them, and fits a
+recovered→true mapping to apply to the real result. This per-trial error determination and
+correction machinery are the enhancements used in Sonnett, Lilly & Grav (2025).
 
 ## Install
 
 ```sh
 pip install -e .            # editable install from a checkout
-pip install -e ".[obs]"     # also install the .obs-building deps
+pip install -e ".[obs]"     # also install the .obs-building dependencies
 ```
 
-Core deps are `numpy`/`scipy`/`matplotlib`; the `[obs]` extra adds `astropy`/`sunpy`/`requests`
-(needed only for building `.obs` files, which also requires internet access). Installing puts
-console commands on your `PATH` (one per script): `pyleader-population` (the end-to-end driver),
-`pyleader-analysis`, `pyleader-build-obs`, `pyleader-synthetic`, `pyleader-sweep`,
-`pyleader-plot-sweep`, `pyleader-fit-correction`, `pyleader-compare`, `pyleader-download-models`.
+Core dependencies are `numpy`/`scipy`/`matplotlib`; the `[obs]` extra adds
+`astropy`/`sunpy`/`requests`, needed only for **building** `.obs` files (which also requires internet
+access). Installing puts one console command per script on your `PATH`:
 
-The synthetic validation needs DAMIT shape models. The listing of representative models
-(`asteroideja.txt`) ships with the package; fetch the models themselves (once, ~29 MB) with:
+| command | script equivalent |
+|---|---|
+| `pyleader-population` | `python scripts/run_population.py` |
+| `pyleader-download-models` | `python scripts/download_models.py` |
+| `pyleader-build-obs` | `python scripts/build_obs_files.py` |
+| `pyleader-analysis` | `python scripts/run_analysis.py` |
+| `pyleader-synthetic` | `python scripts/run_synthetic.py` |
+| `pyleader-sweep` | `python scripts/sweep_synthetic.py` |
+| `pyleader-fit-correction` | `python scripts/fit_correction.py` |
+| `pyleader-plot-sweep` | `python scripts/plot_sweep.py` |
+| `pyleader-compare` | `python scripts/compare_populations.py` |
 
-```sh
-python scripts/download_models.py            # fetch any missing models into damit_models/
-python scripts/download_models.py --force     # refresh all to the latest DAMIT versions
-```
-
-You can also run without installing, straight from a source checkout — every `pyleader-<name>`
-command has an equivalent `python scripts/<name>.py`. The examples below use the `python scripts/…`
-form; substitute the installed command if you prefer.
-
-> The bundled bias correction (`pyleader/synthetic/data/correction_function.json`) is declared as
-> package data in `pyproject.toml`, so `default_correction()` works from an installed copy too.
+The commands and `python scripts/<name>.py` forms are interchangeable; the examples below use the
+installed commands.
 
 ## Usage
 
-### Run the analysis
+The pipeline flows in stages. `pyleader-population` runs stages **2–5** in one call (and stage 1 with
+`--build`); each stage is also a standalone command.
 
-Defaults reproduce the original `LEADER_python_final` configuration:
+```
+   population ID  (family "1128"  or  background "BG_IB_Ctypes")
+         │
+   [0] pyleader-download-models      fetch DAMIT shape models        ── once, prerequisite
+         │
+   [1] pyleader-build-obs            query NEOWISE → one .obs/object  ── needs [obs] extras + internet
+         │
+   [2] pyleader-analysis             LEADER inversion → recovered (p, β) + spread
+         │
+   [3] pyleader-sweep                synthetic (p,β) grid on THIS population's geometry
+         │
+   [4] pyleader-fit-correction       fit recovered→true correction_function.json
+         │
+   [5] apply                         corrected (p, β) → population_report.txt
 
-```sh
-python scripts/run_analysis.py
+   └── pyleader-population wraps [2]–[5] (and [1] with --build) ──┘
 ```
 
-Common overrides:
+### Stage 0 — Fetch DAMIT shape models  (`pyleader-download-models`)
 
-```sh
-# Background population
-python scripts/run_analysis.py --famid BG_PB_Ctypes --population background
+- **What it does:** downloads the representative DAMIT shape models the synthetic stage needs. Run
+  once after cloning. The model *listing* (`asteroideja.txt`) ships with the package; the models
+  themselves (~29 MB) do not.
+- **Input:** none (reads the shipped `asteroideja.txt`; queries the DAMIT database).
+- **Arguments:** `--force` re-download every listed model to its latest DAMIT version *(optional;
+  default fetches only missing ones)*; `--damit-dir PATH` destination *(default `damit_models/`)*.
+- **Output:** `<number>.txt` shape files in `damit_models/`.
 
-# Forced-N (subsample each object to `wanted` amplitudes)
-python scripts/run_analysis.py --famid 4 --forced-n --wanted 11 --diam-low 3 --diam-high 5
+### Stage 1 — Build `.obs` files  (`pyleader-build-obs`, or `pyleader-population --build`)
 
-# Quick test run
-python scripts/run_analysis.py --ntrials 2 --ndraws 50 --overwrite --seed 0
-```
+- **What it does:** resolves the population to its member objects, queries NEOWISE @ IPAC for clean
+  photometry, and writes one `.obs` file per object (photometry + Sun/observer geometry per point).
+- **Input:** membership files under `--base-dir` — `AllMBAFamilyMembers.txt` (families) or
+  `BGobjs_<REGION>_<TYPE>type_neowise.txt` (backgrounds) — plus `neowise_mainbelt.csv`.
+- **Arguments:** `--famid ID` *(required)*; `--population {family,background}` *(default inferred)*;
+  `--cat CATALOG` IRSA catalog *(default `allsky_4band_p1bs_psd`)*; `--filterpriority {w2,w3}`
+  *(default `w3`)*; `--min-obs N` minimum points to keep an object *(int ≥ 1, default 5)*;
+  `--legacy-format` write the old block format *(optional; default tabular)*.
+- **Output:** `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/*.obs`.
 
-Run `python scripts/run_analysis.py --help` for the full list of options. Inputs are read from
-`<base-dir>/<Fam><famid>_data_<cat>_<filter>/` and results are written to a sibling
-`*_analysis_*` directory.
+### Stage 2 — Recover the distributions  (`pyleader-analysis`)
 
-### Build .obs input files
+- **What it does:** runs the LEADER inversion over `Ntrials` random draws of the population and writes
+  the recovered `(p, β)` distributions with their trial-to-trial spread.
+- **Input:** the population's `.obs` directory (from Stage 1) + `neowise_mainbelt.csv` for diameters.
+- **Arguments:** `--famid ID` *(required)*; `--diam-low` / `--diam-high` diameter window in km
+  *(≥ 0, low < high; default 5–10)*; `--ntrials N` *(int ≥ 1, default 100)*; `--ndraws N` objects per
+  trial *(int ≥ 1, default 1000)*; `--phase-angle-limit DEG` max solar phase angle *(0–90, default
+  40)*; `--wanted N` min points per apparition *(int ≥ 3, default 5)*; `--date-tol DAYS` apparition
+  gap *(> 0, default 60)*; `--population {family,background}`; `--forced-n` subsample each object to
+  `wanted` amplitudes; `--overwrite`; `--seed N`.
+- **Output:** `<...>_analysis_<...>_<lo>km_to_<hi>km/` with `SummaryAnalysis_*.txt`, per-`Trial*/`
+  diagnostics, and `Summary_pmax/betamax_*.png`.
 
-```sh
-python scripts/build_obs_files.py --famid 350
-python scripts/build_obs_files.py --famid 350 --curl-only   # just write the bulk curl script
-```
+### Stage 3 — Synthetic sweep  (`pyleader-sweep`; single point: `pyleader-synthetic`)
 
-### Synthetic validation
+- **What it does:** builds synthetic populations of *known* `(p, β)` from DAMIT shapes observed at the
+  target geometry, runs them through LEADER, and tabulates recovered-vs-assigned statistics across a
+  grid of assigned peaks.
+- **Input:** DAMIT models (`damit_models/`) + a geometry source (a directory of `.obs`, or — inside
+  `pyleader-population` — the analyzed population's own files).
+- **Arguments:** `--p-peaks P …` assigned elongation peaks *(each `0 < p ≤ 1`; default
+  0.35 0.45 0.55 0.65 0.75)*; `--b-peaks B …` assigned latitude peaks in **radians** *(each
+  `0 < β < π/2`; default 0.2 0.5 0.9 1.3)*; `--ndraws N` synthetic objects per grid point *(int ≥ 1,
+  default 1000)*; `--nseeds N` realizations per grid point for error bars *(int ≥ 1, default 1)*;
+  `--scattering {ls_lambert,hapke}` *(default `ls_lambert`, matching the MATLAB code)*;
+  `--geometry-dir PATH`; `--outdir PATH` *(required)*; `--seed N`.
+- **Output:** `sweep_stats.csv` (one row per grid point × seed: min/max/mean/median of assigned vs.
+  recovered `p`, `β`) and `sweep_summary.png`. `pyleader-plot-sweep <csv>` re-renders the summary.
 
-To validate the method (and derive corrections for real-data results), build a synthetic
-population with a *known* shape/spin distribution, run it through the same inversion, and check
-that the recovered `(p, β)` matches what was assigned. Synthetic brightness is rendered from
-DAMIT shape models (stretched to a target elongation) under real WISE observing geometry.
+### Stage 4 — Fit the correction  (`pyleader-fit-correction`)
 
-```sh
-# download the DAMIT models listed in asteroideja.txt, then run with assigned peaks
-python scripts/run_synthetic.py --download --p-peak 0.5 --b-peak 0.4 --seed 0
+- **What it does:** fits the recovered→true mapping (a 2-D quadratic in recovered `p`, `β`) from a
+  sweep CSV — the correction to apply to real LEADER output.
+- **Input:** a `sweep_stats.csv` from Stage 3.
+- **Arguments:** `csv` path *(required)*; `--stat {peak,mean,median}` which statistic to correct
+  *(default `mean`; the pipeline uses `peak`, matching LEADER's reported pmax/betamax)*; `-o PATH`
+  output JSON.
+- **Output:** `correction_function.json` (coefficients + fit diagnostics) and a predicted-vs-true
+  `correction_fit.png`.
 
-# compare two recovered populations (e.g. different assigned beta) -> L1/L2/L-inf distances
-python scripts/compare_populations.py runA/synthetic_result.npz runB/synthetic_result.npz \
-    --outdir cmp_A_vs_B --labels "b=0.3" "b=0.8"
-```
+### Stage 5 — Apply the correction
 
-The run writes recovered-vs-assigned marginal plots for `p` and `β`, the solution contours, and
-a `synthetic_result.npz` for later comparison. The Hapke scattering law is available via
-`--scattering hapke` (the default `ls_lambert` matches the original MATLAB code).
-
-> DAMIT models are fetched from the DAMIT database; if you use them, please cite
-> Ďurech et al. (2010) and the original papers for the individual shape models.
-
-### Synthetic sweep & bias correction
-
-To characterize LEADER's bias across the parameter space, sweep a grid of assigned
-`(p_peak, β_peak)` with several random realizations (seeds) per grid point:
-
-```sh
-python scripts/sweep_synthetic.py \
-    --p-peaks 0.35 0.45 0.55 0.65 0.75 --b-peaks 0.2 0.5 0.9 1.3 \
-    --ndraws 1000 --nseeds 3 --seed 0 --outdir ~/synthetic_sweep
-```
-
-This writes `sweep_stats.csv` (one row per grid-point × seed, with min/max/mean/median of the
-assigned and recovered `p` and `β` distributions) and `sweep_summary.png` — a 2-panel figure of
-recovered vs. assigned means as a function of each input parameter, with ±1σ error bars over the
-seeds. (`scripts/plot_sweep.py <csv>` re-renders that figure from any sweep CSV.)
-
-Then fit a **bias-correction function** that maps what LEADER *recovers* back to the *true* value,
-for application to real-data results:
-
-```sh
-python scripts/fit_correction.py ~/synthetic_sweep/sweep_stats.csv
-```
-
-This records `correction_function.json` (2D-quadratic coefficients + fit diagnostics) and a
-predicted-vs-true `correction_fit.png`. Apply it to real LEADER output:
+Apply a fitted (or the shipped default) correction to real LEADER output:
 
 ```python
 from pyleader.synthetic import default_correction, load_correction, apply_correction
 
-corr = default_correction()                      # the correction shipped with the package
-# corr = load_correction("correction_function.json")   # or your own fit
+corr = default_correction()                              # shipped with the package
+# corr = load_correction("correction_function.json")     # or a population-specific fit
 p_true, beta_true = apply_correction(p_recovered, beta_recovered_deg, corr)
 ```
 
-The shipped correction (from a 20×3 sweep) fits `p` well (R²≈0.95) and `β` reasonably (R²≈0.92);
-because the recovered `β` range is compressed, the `β` correction extrapolates outside the sampled
-range and should be treated as indicative. Regenerate it for your own configuration with
-`scripts/fit_correction.py`.
+`pyleader-compare A.npz B.npz --outdir cmp` reports the L1/L2/L∞ distances between two recovered
+distributions.
 
-### Per-population pipeline
+### The whole pipeline  (`pyleader-population`)
 
-The single driver chains all of the above for one population, deriving the correction from **that
-population's own `.obs` observing geometry** (so it reflects the actual cadence of the data being
-analyzed — the scientifically appropriate choice, since it differs from dataset to dataset):
+Runs stages 2–5 for one population, deriving the correction from **that population's own `.obs`
+observing geometry** (the scientifically appropriate choice, since the geometry — hence the bias —
+differs per dataset):
 
 ```sh
 # a collisional family, analyzing an existing .obs dataset end-to-end
-python scripts/run_population.py 1128 --diam-low 1 --diam-high 100
+pyleader-population 1128 --diam-low 1 --diam-high 100
 
-# a background population, fetching .obs from NEOWISE first (needs the [obs] extras + internet)
-python scripts/run_population.py BG_IB_Ctypes --build
+# a background population, fetching .obs from NEOWISE first
+pyleader-population BG_IB_Ctypes --build
 ```
 
-Family IDs are numeric/family designations (members from `AllMBAFamilyMembers.txt`); background IDs
-look like `BG_<REGION>_<TYPE>types` (e.g. `BG_IB_Ctypes`, members from
-`BGobjs_<REGION>_<TYPE>type_neowise.txt`). The driver runs the LEADER analysis, sweeps the synthetic
-validation over a `(p_peak, β_peak)` grid **using the population's geometries and matched
-tolerances**, fits a population-specific `correction_function.json`, and writes a
-`population_report.txt` mapping the recovered `(p, β)` peak to its corrected estimate (flagging when
-the recovered value falls outside the synthetic range, where the correction extrapolates).
-
-The pipeline assumes the DAMIT models already exist (fetch them once with
-`pyleader-download-models`); add `--refresh-models` to re-download the latest DAMIT versions of the
-`asteroideja.txt` models before running.
+- **Input:** the population's `.obs` directory (or `--build` to create it) + DAMIT models
+  (`pyleader-download-models`; the run stops early with instructions if they are missing).
+- **Arguments:** the positional population `ID` *(required)*; the Stage-2 analysis options
+  (`--diam-low/-high`, `--ntrials`, `--ndraws`, `--phase-angle-limit`, `--date-tol`, `--wanted`); the
+  Stage-3 sweep options (`--p-peaks`, `--b-peaks`, `--sweep-ndraws`, `--nseeds`, `--scattering`);
+  `--correction-stat {peak,mean,median}` *(default `peak`)*; `--build`; `--refresh-models`
+  re-download the latest DAMIT models first; `--base-dir PATH`; `--seed N`.
+- **Output:** the analysis directory plus `correction_sweep/`, the population-specific
+  `correction_function.json` + `correction_fit.png`, and `population_report.txt` (recovered → corrected
+  `p`, `β`, with an extrapolation warning when the recovered value falls outside the synthetic range).
 
 ### `.obs` file format
 
-PyLEADER reads **either** `.obs` layout — `read_obs()` auto-detects them, so datasets from prior
-analyses work unchanged:
+PyLEADER reads **either** layout — `read_obs()` auto-detects them, so datasets from prior analyses
+work unchanged. **Both are fully supported.**
 
-- **Tabular** (written by default): a `#` comment header then one whitespace row per measurement —
-  `jd  sun_x sun_y sun_z  obs_x obs_y obs_z  wavelength flux fluxerr filter`.
-- **Legacy block**: the original format (count header; per-epoch Sun/observer vectors and
+- **Tabular** (written by default): a `#` comment header, then one whitespace-delimited row per
+  measurement — `jd  sun_x sun_y sun_z  obs_x obs_y obs_z  wavelength flux fluxerr filter`.
+- **Legacy block:** the original format (count header; per-epoch Sun/observer vectors and
   `λ flux σ filter` lines separated by blank lines). Pass `--legacy-format` to write it.
-
-Both are fully supported; the tabular form is just less fiddly to produce and parse.
 
 ### As a library
 
 ```python
-from pyleader import (AnalysisConfig, run_analysis, SyntheticConfig, run_synthetic,
-                      PopulationConfig, run_population)
+from pyleader import PopulationConfig, run_population
 
-outdir = run_analysis(AnalysisConfig(famid="3815", Ntrials=2, Ndraws=50, overwrite=True), seed=0)
-res = run_synthetic(SyntheticConfig(p_peak=0.5, b_peak=0.4, Ndraws=200), seed=0)
-
-# end-to-end for one population (analysis + per-population correction + apply)
 result = run_population(PopulationConfig(pop_id="1128", diam_low=1, diam_high=100), seed=0)
-print(result.recovered, "->", result.corrected)
+print(result.recovered, "->", result.corrected)   # (p, β_deg) before and after correction
 ```
 
-## Example output
+## Example: the Hygiea family
 
-The figures below come from a run on the Hygiea family (family 10; 3–5 km diameter range,
-100 trials), produced by the original notebook workflow. A run writes per-trial diagnostics
-into each `Trial*/` subdirectory and population-level summaries at the top of the output
-directory.
+The figures below are for the **Hygiea family** (family 10; 3–5 km diameter range). The per-trial
+and summary diagnostics come from a 100-trial LEADER analysis.
 
-**Per-trial diagnostics**
-
-The inversion fits the cumulative distribution of light-curve amplitudes `A`. The relative
-error quantifies how well the reconstructed CDF (∑ wᵢⱼFᵢⱼ) matches the observed one:
+**Per-trial diagnostics.** The inversion fits the cumulative distribution of light-curve amplitudes
+`A`; the relative error measures how well the reconstructed CDF (∑ wᵢⱼFᵢⱼ) matches the observed one.
+The solved occupation numbers `w` over the `(p, β)` grid, and the smoothed joint distribution:
 
 ![Fit of the amplitude CDF](docs/images/RelativeError.png)
-
-The solved occupation numbers `w` over the (shape `p`, spin-axis `β`) grid, and the same
-solution after smoothing into a joint distribution f(p, β):
-
 ![Occupation numbers over (p, beta)](docs/images/OccupationNumbers_w.png)
 ![Smoothed joint distribution f(p, beta)](docs/images/Solutions_smoothed.png)
 
-**Population summaries (across all trials)**
-
-The peak of the shape (`p`) and spin-axis (`β`) distributions over all 100 trials, each with a
-Gaussian fit giving the population value and its spread:
+**Population summaries (across all trials).** The peak of the shape (`p`) and spin-axis (`β`)
+distributions over all trials, each with a Gaussian fit giving the population value and its spread:
 
 ![Distribution of p peaks](docs/images/Summary_pmax.png)
 ![Distribution of beta peaks](docs/images/Summary_betamax.png)
 
+**Per-population bias correction.** Running the full pipeline on this dataset
+
+```sh
+pyleader-population 10 --diam-low 3 --diam-high 5 --ntrials 30
+```
+
+derives a correction from Hygiea's *own* observing geometry — a synthetic `(p_peak, β_peak)` sweep
+(20 grid points) observed at the family's cadence, fit as a recovered→true mapping. The fit recovers
+the assigned peaks well (R² = 0.944 for `p`, 0.929 for `β`):
+
+![Hygiea correction fit: corrected vs true p and beta](docs/images/Hygiea_correction_fit.png)
+
+Applying it de-biases the LEADER result for the population (`population_report.txt`):
+
+| quantity | recovered | corrected |
+|---|---|---|
+| `p` | 0.503 | **0.610** |
+| `β` (deg) | 30.3 | **2.6** |
+
+As expected from the method, `p` is corrected upward (LEADER recovers it biased low), and `β` — only
+weakly constrained by amplitudes and near the low edge of the synthetic recovered range here — shifts
+toward the pole; the report flags such near/out-of-range cases as uncertain. *(This example uses a
+reduced configuration — 30 trials, a single-seed 20-point sweep — for speed; production runs would use
+more trials and seeds.)*
+
+
+
+## Package layout
+
+```
+pyleader/
+  pipeline.py      run_population(): the end-to-end per-population driver
+  populations.py   resolve a family / background ID to its member objects
+  config.py        AnalysisConfig / ObsBuildConfig / (SyntheticConfig, PopulationConfig)
+  obsio.py         read/write .obs files (auto-detects tabular or legacy block format)
+  lightcurve.py    read & phase-correct .obs -> amplitudes  (lcg_read_WISE)
+  inversion.py     linear inversion for (p, β) occupation numbers  (leader_invert)
+  postprocess.py   solution smoothing;  plotting.py  per-trial & summary plots
+  analysis.py      run_analysis(): the LEADER experiment driver
+  obsfiles/        build .obs files from IRSA + JPL Horizons
+  synthetic/       synthetic validation, sweep, and bias correction (from DAMIT models)
+  cli/             console-command implementations (scripts/*.py are thin shims)
+```
+
 ## Notes on the notebook → package conversion
 
-A few clear bugs in the notebooks were fixed during conversion; each fix is marked `# FIX:` in
-the source (phase-correction return value, an apparition off-by-one, the forced-N subsampling,
-and removal of dead `interp2d`/`mlab` imports). Because of these fixes, results will not be
-bit-for-bit identical to the original notebooks.
+The package supersedes the original Jupyter notebooks (`LEADER_python_final`, `_bg`, `_forcedN`),
+which are unified into one configurable driver (`_bg` = `--population background`, `_forcedN` =
+`--forced-n`). A few clear bugs were fixed during conversion (each marked `# FIX:` in the source:
+phase-correction return value, an apparition off-by-one, the forced-N subsampling, and removal of
+dead `interp2d`/`mlab` imports), so results are not bit-for-bit identical to the notebooks.
 
 ## References
 
