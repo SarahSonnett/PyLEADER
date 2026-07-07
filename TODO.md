@@ -24,5 +24,6 @@ Remaining / nice-to-have:
 
 ## Data (not committed; regenerable)
 
-- `damit_models/` — 347 DAMIT shape models, gitignored (~29 MB). Regenerate with
-  `scripts/run_synthetic.py --download` or `scripts/sweep_synthetic.py` after downloading.
+- `damit_models/` — 347 DAMIT shape models, gitignored (~29 MB). Fetch with
+  `pyleader-download-models` (or `scripts/download_models.py`); the listing (`asteroideja.txt`)
+  ships in `pyleader/synthetic/data/`. Use `--force` to refresh to the latest DAMIT versions.

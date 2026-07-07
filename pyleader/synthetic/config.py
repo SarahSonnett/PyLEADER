@@ -21,6 +21,10 @@ _LEADER_MASTER = f"{DEFAULT_BASE_DIR}/LEADER-master"
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DAMIT_MODELS_DIR = os.path.join(_REPO_ROOT, "damit_models")
 
+# Package data dir; ships the DAMIT model listing (asteroideja.txt) + default correction.
+_SYN_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+_DAMIT_LIST = os.path.join(_SYN_DATA_DIR, "asteroideja.txt")
+
 
 @dataclass
 class SyntheticConfig:
@@ -63,7 +67,7 @@ class SyntheticConfig:
     deltaB: float = 1.0
 
     # --- data paths ---
-    damit_list: str = f"{_LEADER_MASTER}/asteroideja.txt"
+    damit_list: str = _DAMIT_LIST
     damit_dir: str = _DAMIT_MODELS_DIR
     geometry_dir: str = f"{_LEADER_MASTER}/WISE_3band_subset/WISE/WISE_3band/obs"
     # Explicit list of .obs geometry files; when set it overrides geometry_dir

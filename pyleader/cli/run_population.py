@@ -51,6 +51,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--correction-stat", choices=("peak", "mean", "median"), default=d.correction_stat)
     p.add_argument("--base-dir", default=None)
     p.add_argument("--build", action="store_true", help="query NEOWISE and write .obs first")
+    p.add_argument("--refresh-models", action="store_true",
+                   help="re-download the latest DAMIT versions of the asteroideja.txt models first")
     p.add_argument("--seed", type=int, default=None)
     return p
 
@@ -65,7 +67,7 @@ def main(argv=None) -> int:
         sweep_ndraws=a.sweep_ndraws, nseeds=a.nseeds, scattering=a.scattering,
         correction_stat=a.correction_stat, base_dir=a.base_dir,
     )
-    res = run_population(cfg, do_build=a.build, seed=a.seed)
+    res = run_population(cfg, do_build=a.build, refresh_models=a.refresh_models, seed=a.seed)
     print(f"\nDone. Report + correction in: {res.outdir}")
     return 0
 

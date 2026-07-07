@@ -24,6 +24,7 @@ Repository = "https://github.com/SarahSonnett/PyLEADER"
 
 [project.scripts]
 pyleader-population      = "pyleader.cli.run_population:main"
+pyleader-download-models = "pyleader.cli.download_models:main"
 pyleader-analysis        = "pyleader.cli.run_analysis:main"
 pyleader-build-obs       = "pyleader.cli.build_obs_files:main"
 pyleader-synthetic       = "pyleader.cli.run_synthetic:main"
@@ -36,5 +37,5 @@ pyleader-fit-correction  = "pyleader.cli.fit_correction:main"
 include = ["pyleader*"]
 
 [tool.setuptools.package-data]
-# Ship the canonical bias correction so default_correction() works when installed.
-"pyleader.synthetic" = ["data/*.json"]
+# Ship the canonical bias correction (json) and the DAMIT model listing (txt).
+"pyleader.synthetic" = ["data/*.json", "data/*.txt"]

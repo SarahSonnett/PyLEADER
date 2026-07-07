@@ -101,7 +101,15 @@ Core deps are `numpy`/`scipy`/`matplotlib`; the `[obs]` extra adds `astropy`/`su
 (needed only for building `.obs` files, which also requires internet access). Installing puts
 console commands on your `PATH` (one per script): `pyleader-population` (the end-to-end driver),
 `pyleader-analysis`, `pyleader-build-obs`, `pyleader-synthetic`, `pyleader-sweep`,
-`pyleader-plot-sweep`, `pyleader-fit-correction`, `pyleader-compare`.
+`pyleader-plot-sweep`, `pyleader-fit-correction`, `pyleader-compare`, `pyleader-download-models`.
+
+The synthetic validation needs DAMIT shape models. The listing of representative models
+(`asteroideja.txt`) ships with the package; fetch the models themselves (once, ~29 MB) with:
+
+```sh
+python scripts/download_models.py            # fetch any missing models into damit_models/
+python scripts/download_models.py --force     # refresh all to the latest DAMIT versions
+```
 
 You can also run without installing, straight from a source checkout — every `pyleader-<name>`
 command has an equivalent `python scripts/<name>.py`. The examples below use the `python scripts/…`
@@ -227,6 +235,10 @@ validation over a `(p_peak, β_peak)` grid **using the population's geometries a
 tolerances**, fits a population-specific `correction_function.json`, and writes a
 `population_report.txt` mapping the recovered `(p, β)` peak to its corrected estimate (flagging when
 the recovered value falls outside the synthetic range, where the correction extrapolates).
+
+The pipeline assumes the DAMIT models already exist (fetch them once with
+`pyleader-download-models`); add `--refresh-models` to re-download the latest DAMIT versions of the
+`asteroideja.txt` models before running.
 
 ### `.obs` file format
 

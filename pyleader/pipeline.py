@@ -112,9 +112,22 @@ def _recovered_peak(analysis_outdir: str, pop_id: str):
     return float(np.mean(np.atleast_1d(pmax))), float(np.mean(np.atleast_1d(betamax)))
 
 
-def run_population(cfg: PopulationConfig, *, do_build: bool = False, seed: int | None = None) -> PopulationResult:
-    """Run the full per-population pipeline; returns a :class:`PopulationResult`."""
+def run_population(cfg: PopulationConfig, *, do_build: bool = False,
+                   refresh_models: bool = False, seed: int | None = None) -> PopulationResult:
+    """Run the full per-population pipeline; returns a :class:`PopulationResult`.
+
+    DAMIT shape models are assumed to already exist in the models directory;
+    pass ``refresh_models=True`` to re-download the current DAMIT versions of the
+    models listed in ``asteroideja.txt`` before the correction sweep.
+    """
     acfg = cfg.analysis_config()
+
+    # 0. optionally refresh the DAMIT shape models
+    if refresh_models:
+        from .synthetic.config import SyntheticConfig
+        from .synthetic.damit import download_damit_models, parse_model_list
+        scfg = SyntheticConfig()
+        download_damit_models(parse_model_list(scfg.damit_list), scfg.damit_dir, force=True)
 
     # 1. build .obs (optional; needs network + astropy/sunpy)
     if do_build:

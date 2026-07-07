@@ -122,20 +122,25 @@ def _load_number_to_model(timeout=120):
     }
 
 
-def download_damit_models(numbers, dest, *, timeout=120, verbose=True):
+def download_damit_models(numbers, dest, *, force=False, timeout=120, verbose=True):
     """Download one DAMIT shape model per asteroid number into ``dest``.
 
     Files are written as ``<number>.txt`` in OBJ format (matching the LEADER
-    listing). Existing files are not re-downloaded. Numbers without an
-    accessible model are skipped. Returns the list of numbers now available
-    locally in ``dest``.
+    listing). By default existing files are kept (only missing ones are
+    fetched); pass ``force=True`` to re-download the current DAMIT version of
+    every listed model (refreshing them). Numbers without an accessible model
+    are skipped. Returns the list of numbers now available locally in ``dest``.
     """
     os.makedirs(dest, exist_ok=True)
 
     wanted = list(dict.fromkeys(numbers))  # de-dupe, keep order
-    missing = [n for n in wanted if not os.path.exists(os.path.join(dest, f"{n}.txt"))]
-
-    available = [n for n in wanted if os.path.exists(os.path.join(dest, f"{n}.txt"))]
+    present = [n for n in wanted if os.path.exists(os.path.join(dest, f"{n}.txt"))]
+    if force:
+        missing = wanted                     # refresh all listed models
+        available = []
+    else:
+        missing = [n for n in wanted if n not in present]
+        available = list(present)
     if not missing:
         if verbose:
             print(f"All {len(wanted)} models already present in {dest}")
