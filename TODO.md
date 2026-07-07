@@ -22,6 +22,25 @@ Remaining / nice-to-have:
       `pyproject.toml`.
 - [ ] Publish (tag + build sdist/wheel) if distributing beyond source checkouts.
 
+## Correction v2 (planned — next session)
+
+- [ ] Implement the **posterior-inversion correction + response-matrix unfolding** per the design
+      doc: [docs/plans/correction_v2_posterior_and_unfolding.md](docs/plans/correction_v2_posterior_and_unfolding.md).
+      Phase 0 (shared delta-basis runs, multiprocessing pool + `--task k/N` chunking) → Phase 1
+      (posterior correction with credible intervals; degeneracy shows up as widened/multimodal
+      posteriors) → Phase 2 (response-matrix unfolding of full f(p, β)). Local compute is fine
+      (M3 Max, ~10–30 min/population pooled); cluster notes in the doc.
+
+## Optional follow-on tooling (deferred)
+
+- [ ] Port the `Compare_LEADER_results_*.ipynb` notebooks (currently in
+      `~/Desktop/work/MBA_SFDs/`) as **optional** follow-on code — comparison plots across
+      populations/regions/sizes/taxonomies built from the `DF_p_all.txt` / `DF_b_all.txt`
+      outputs. Lower priority / narrower audience: mostly reproduces the author's own analyses,
+      though a few datasets are usable by others. Keep it out of the core pipeline.
+    - Heads-up when porting: these read `MarginalDF_p_beta_trial*.txt`, which now has 29 rows with
+      `nan`-padded `p` columns (full β marginal); ensure the `p`-column handling is NaN-aware.
+
 ## Data (not committed; regenerable)
 
 - `damit_models/` — 347 DAMIT shape models, gitignored (~29 MB). Fetch with
