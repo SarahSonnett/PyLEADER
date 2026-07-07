@@ -139,12 +139,16 @@ def leader_plots(
     plt.close()
 
     # --- marginal DF text output ---
+    # p and beta have different bin counts (20 vs 29); write max rows and pad the
+    # shorter (p) columns with 'nan' so the full beta marginal is preserved.
+    def _cell(arr, i):
+        return "%1.5f" % arr[i] if i < len(arr) else "nan"
+
     with open(f"{tdir}/MarginalDF_p_beta_trial{trial + 1}.txt", "w+") as outfile:
         outfile.write("p   DF_p   Beta   DF_beta\n")
-        for i in range(len(Pmargin)):
-            outfile.write(
-                "%1.5f  %1.5f  %1.5f  %1.5f\n" % (P[i], Pmargin[i], BETA[i], Bmargin[i])
-            )
+        for i in range(max(len(P), len(BETA))):
+            outfile.write("%s  %s  %s  %s\n" % (
+                _cell(P, i), _cell(Pmargin, i), _cell(BETA, i), _cell(Bmargin, i)))
 
 
 def plot_alltrials(dist: np.ndarray, ttle: str, pltname: str, outdir: str, *, show: bool = False) -> None:
@@ -207,9 +211,13 @@ def plot_population_df(outdir: str, cfg: AnalysisConfig, *, show: bool = False) 
         ("p", P, DFP, "0.65", "k", "-", "b:a axis ratio", "DF_p_all", "DF_p_all.txt"),
         ("b", B, DFB, "lightskyblue", "b", "-.", "Spin pole polar angle (degrees)", "DF_b_all", "DF_b_all.txt"),
     ):
-        med = np.median(grid, axis=0)
-        med_df = np.median(dfs, axis=0)
-        err = np.std(dfs, axis=0)
+        # drop bins that are all-NaN across trials (the padded p tail); this also
+        # tolerates the older truncated 20-row files transparently.
+        valid = np.any(np.isfinite(grid), axis=0)
+        grid, dfs = grid[:, valid], dfs[:, valid]
+        med = np.nanmedian(grid, axis=0)
+        med_df = np.nanmedian(dfs, axis=0)
+        err = np.nanstd(dfs, axis=0)
 
         plt.figure()
         for i in range(len(grid)):
