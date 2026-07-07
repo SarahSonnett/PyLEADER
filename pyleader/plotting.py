@@ -12,6 +12,9 @@ that were never defined), so it has been dropped along with the dead imports.
 
 from __future__ import annotations
 
+import glob
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
@@ -164,3 +167,67 @@ def plot_alltrials(dist: np.ndarray, ttle: str, pltname: str, outdir: str, *, sh
     if show:
         plt.show()
     plt.close()
+
+
+def _population_counts(outdir: str, famid: str):
+    """Median (N_obj, AvgPointsPerObj) across trials, from the summary file."""
+    summary = f"{outdir}/SummaryAnalysis_Famid{famid}.txt"
+    try:
+        nobj, npoints = np.genfromtxt(summary, unpack=True, usecols=(4, 5), dtype=float, skip_header=1)
+        return float(np.median(np.atleast_1d(nobj))), float(np.median(np.atleast_1d(npoints)))
+    except (OSError, ValueError):
+        return 0.0, 0.0
+
+
+def plot_population_df(outdir: str, cfg: AnalysisConfig, *, show: bool = False) -> bool:
+    """Population-level marginal DFs of ``p`` and ``β``, aggregated over all trials.
+
+    Reproduces the ``DF_p_all.png`` / ``DF_b_all.png`` (+ ``.txt``) figures from the
+    post-analysis ``Analyze_LEADER_results`` notebook: every trial's marginal DF is
+    overplotted faintly, with the across-trial median ± 1σ drawn on top. Reads the
+    per-trial ``MarginalDF_p_beta_trial*.txt`` files written by :func:`leader_plots`.
+    Returns ``True`` if figures were produced.
+    """
+    files = sorted(glob.glob(os.path.join(outdir, "Trial*", "MarginalDF_p_beta_trial*.txt")))
+    if not files:
+        return False
+
+    P, DFP, B, DFB = [], [], [], []
+    for f in files:
+        pf, dfpf, bf, dfbf = np.genfromtxt(f, unpack=True, skip_header=1, dtype=float)
+        P.append(pf); DFP.append(dfpf); B.append(bf); DFB.append(dfbf)
+    P, DFP, B, DFB = np.array(P), np.array(DFP), np.array(B), np.array(DFB)
+
+    nobj, npoints = _population_counts(outdir, cfg.famid)
+    title = (f"{cfg.famid}, {int(cfg.diam_low)}" + r"$\leq$" + " D (km) < "
+             + f"{int(cfg.diam_high)},\n{int(nobj)} objects, "
+             + f"{round(npoints, 2)} data points per object")
+
+    for quant, grid, dfs, faint, medc, medfmt, xlabel, png, txt in (
+        ("p", P, DFP, "0.65", "k", "-", "b:a axis ratio", "DF_p_all", "DF_p_all.txt"),
+        ("b", B, DFB, "lightskyblue", "b", "-.", "Spin pole polar angle (degrees)", "DF_b_all", "DF_b_all.txt"),
+    ):
+        med = np.median(grid, axis=0)
+        med_df = np.median(dfs, axis=0)
+        err = np.std(dfs, axis=0)
+
+        plt.figure()
+        for i in range(len(grid)):
+            plt.plot(grid[i], dfs[i], color=faint, linestyle="-", lw=0.2,
+                     alpha=(0.9 if quant == "b" else 1.0))
+        plt.errorbar(med, med_df, yerr=err, color=medc, fmt=medfmt, capsize=0)
+        plt.title(title)
+        plt.xlabel(xlabel)
+        plt.ylabel("Density function")
+        plt.tight_layout()
+        plt.savefig(f"{outdir}/{png}.png", dpi=300)
+        if show:
+            plt.show()
+        plt.close()
+
+        with open(f"{outdir}/{txt}", "w+") as outfile:
+            outfile.write(f"{int(nobj)} {round(npoints, 2)}\n")
+            for i in range(len(med)):
+                outfile.write("%1.2f  %1.3f  %1.3f\n" % (med[i], med_df[i], err[i]))
+
+    return True

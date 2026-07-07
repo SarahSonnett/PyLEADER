@@ -18,7 +18,7 @@ from .config import AnalysisConfig
 from .inversion import leader_invert
 from .lightcurve import lcg_read_WISE
 from .naming import convert_to_mpecname
-from .plotting import leader_plots, plot_alltrials
+from .plotting import leader_plots, plot_alltrials, plot_population_df
 from .postprocess import leader_postprocess_WISE
 
 
@@ -185,5 +185,8 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
                    f"Summary_betamax_Famid{famid}", outdir, show=show)
     plot_alltrials(pmax_all, "Peak of p distribution",
                    f"Summary_pmax_Famid{famid}", outdir, show=show)
+
+    # population-level marginal DFs of p and beta (DF_p_all/DF_b_all .png + .txt)
+    plot_population_df(outdir, cfg, show=show)
 
     return outdir
