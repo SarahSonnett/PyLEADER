@@ -15,7 +15,7 @@ pyleader-population 1128            # a collisional family
 pyleader-population BG_IB_Ctypes    # a background population (add --build to fetch photometry)
 ```
 
-Every stage is also available as a standalone command (see [Usage](#usage)).
+Every step is also available as a standalone command (see [Usage](#usage)).
 
 ## How it works
 
@@ -90,8 +90,8 @@ installed commands.
 
 ## Usage
 
-The pipeline flows in stages. `pyleader-population` runs stages **2–5** in one call (and stage 1 with
-`--build`); each stage is also a standalone command.
+The pipeline flows in steps. `pyleader-population` runs steps **2–5** in one call (and step 1 with
+`--build`); each step is also a standalone command.
 
 ```
    population ID  (family "1128"  or  background "BG_IB_Ctypes")
@@ -111,9 +111,9 @@ The pipeline flows in stages. `pyleader-population` runs stages **2–5** in one
    └── pyleader-population wraps [2]–[5] (and [1] with --build) ──┘
 ```
 
-### Stage 0 — Fetch DAMIT shape models  (`pyleader-download-models`)
+### step 0 — Fetch DAMIT shape models  (`pyleader-download-models`)
 
-- **What it does:** downloads the representative DAMIT shape models the synthetic stage needs. Run
+- **What it does:** downloads the representative DAMIT shape models the synthetic step needs. Run
   once after cloning. The model *listing* (`asteroideja.txt`) ships with the package; the models
   themselves (~29 MB) do not.
 - **Input:** none (reads the shipped `asteroideja.txt`; queries the DAMIT database).
@@ -121,7 +121,7 @@ The pipeline flows in stages. `pyleader-population` runs stages **2–5** in one
   default fetches only missing ones)*; `--damit-dir PATH` destination *(default `damit_models/`)*.
 - **Output:** `<number>.txt` shape files in `damit_models/`.
 
-### Stage 1 — Build `.obs` files  (`pyleader-build-obs`, or `pyleader-population --build`)
+### step 1 — Build `.obs` files  (`pyleader-build-obs`, or `pyleader-population --build`)
 
 - **What it does:** resolves the population to its member objects, queries NEOWISE @ IPAC for clean
   photometry, and writes one `.obs` file per object (photometry + Sun/observer geometry per point).
@@ -134,11 +134,11 @@ The pipeline flows in stages. `pyleader-population` runs stages **2–5** in one
   `--obsdir DIR` write the `.obs` files to an exact directory instead of the derived path.
 - **Output:** `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/*.obs` (or `--obsdir` if given).
 
-### Stage 2 — Recover the distributions  (`pyleader-analysis`)
+### Step 2 — Recover the distributions  (`pyleader-analysis`)
 
 - **What it does:** runs the LEADER inversion over `Ntrials` random draws of the population and writes
   the recovered `(p, β)` distributions with their trial-to-trial spread.
-- **Input:** the population's `.obs` directory (from Stage 1) + `neowise_mainbelt.csv` for diameters.
+- **Input:** the population's `.obs` directory (from Step 1) + `neowise_mainbelt.csv` for diameters.
   The directory is derived as `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/`; use `--obsdir DIR` to
   read from an exact directory that doesn't follow this naming.
 - **Arguments:** `--famid ID` *(required)*; `--diam-low` / `--diam-high` diameter window in km
@@ -150,7 +150,7 @@ The pipeline flows in stages. `pyleader-population` runs stages **2–5** in one
 - **Output:** `<...>_analysis_<...>_<lo>km_to_<hi>km/` with `SummaryAnalysis_*.txt`, per-`Trial*/`
   diagnostics, and `Summary_pmax/betamax_*.png`.
 
-### Stage 3 — Synthetic sweep  (`pyleader-sweep`; single point: `pyleader-synthetic`)
+### Step 3 — Synthetic sweep  (`pyleader-sweep`; single point: `pyleader-synthetic`)
 
 - **What it does:** builds synthetic populations of *known* `(p, β)` from DAMIT shapes observed at the
   target geometry, runs them through LEADER, and tabulates recovered-vs-assigned statistics across a
@@ -166,18 +166,18 @@ The pipeline flows in stages. `pyleader-population` runs stages **2–5** in one
 - **Output:** `sweep_stats.csv` (one row per grid point × seed: min/max/mean/median of assigned vs.
   recovered `p`, `β`) and `sweep_summary.png`. `pyleader-plot-sweep <csv>` re-renders the summary.
 
-### Stage 4 — Fit the correction  (`pyleader-fit-correction`)
+### Step 4 — Fit the correction  (`pyleader-fit-correction`)
 
 - **What it does:** fits the recovered→true mapping (a 2-D quadratic in recovered `p`, `β`) from a
   sweep CSV — the correction to apply to real LEADER output.
-- **Input:** a `sweep_stats.csv` from Stage 3.
+- **Input:** a `sweep_stats.csv` from Step 3.
 - **Arguments:** `csv` path *(required)*; `--stat {peak,mean,median}` which statistic to correct
   *(default `mean`; the pipeline uses `peak`, matching LEADER's reported pmax/betamax)*; `-o PATH`
   output JSON.
 - **Output:** `correction_function.json` (coefficients + fit diagnostics) and a predicted-vs-true
   `correction_fit.png`.
 
-### Stage 5 — Apply the correction
+### Step 5 — Apply the correction
 
 Apply a fitted (or the shipped default) correction to real LEADER output:
 
@@ -194,7 +194,7 @@ distributions.
 
 ### The whole pipeline  (`pyleader-population`)
 
-Runs stages 2–5 for one population, deriving the correction from **that population's own `.obs`
+Runs steps 2–5 for one population, deriving the correction from **that population's own `.obs`
 observing geometry** (the scientifically appropriate choice, since the geometry — hence the bias —
 differs per dataset):
 
@@ -208,9 +208,9 @@ pyleader-population BG_IB_Ctypes --build
 
 - **Input:** the population's `.obs` directory (or `--build` to create it) + DAMIT models
   (`pyleader-download-models`; the run stops early with instructions if they are missing).
-- **Arguments:** the positional population `ID` *(required)*; the Stage-2 analysis options
+- **Arguments:** the positional population `ID` *(required)*; the Step-2 analysis options
   (`--diam-low/-high`, `--ntrials`, `--ndraws`, `--phase-angle-limit`, `--date-tol`, `--wanted`); the
-  Stage-3 sweep options (`--p-peaks`, `--b-peaks`, `--sweep-ndraws`, `--nseeds`, `--scattering`);
+  Step-3 sweep options (`--p-peaks`, `--b-peaks`, `--sweep-ndraws`, `--nseeds`, `--scattering`);
   `--correction-stat {peak,mean,median}` *(default `peak`)*; `--build`; `--refresh-models`
   re-download the latest DAMIT models first; `--base-dir PATH`; `--obsdir DIR` read/write `.obs`
   from an exact directory (the correction sweep's geometry follows it); `--seed N`.
