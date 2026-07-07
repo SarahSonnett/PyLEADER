@@ -92,30 +92,35 @@ installed commands.
 
 ## Usage
 
-The pipeline flows in steps. `pyleader-population` runs steps **2–5** in one call (and step 1 with
+The pipeline flows in steps. `pyleader-population` runs steps **3–6** in one call (and step 2 with
 `--build`); each step is also a standalone command.
 
 ```
    population ID  (family "1128"  or  background "BG_IB_Ctypes")
          │
-   [0] pyleader-download-models      fetch DAMIT shape models        ── once, prerequisite
+   [1] pyleader-download-models      fetch DAMIT shape models        ── once, prerequisite
          │
-   [1] pyleader-build-obs            query NEOWISE → one .obs/object  ── needs [obs] extras + internet
+   [2] pyleader-build-obs            query NEOWISE → one .obs/object  ── needs [obs] extras + internet
          │
-   [2] pyleader-analysis             LEADER inversion → recovered (p, β) + spread
+   [3] pyleader-analysis             LEADER inversion → recovered (p, β) + spread
          │
-   [3] pyleader-sweep                synthetic (p,β) grid on THIS population's geometry
+   [4] pyleader-sweep                synthetic (p,β) grid on THIS population's geometry
          │
-   [4] pyleader-fit-correction       fit recovered→true correction_function.json
+   [5] pyleader-fit-correction       fit recovered→true correction_function.json
          │
-   [5] apply                         corrected (p, β) → population_report.txt
+   [6] apply                         corrected (p, β) → population_report.txt
 
-   └── pyleader-population wraps [2]–[5] (and [1] with --build) ──┘
+   └── pyleader-population wraps [3]–[6] (and [2] with --build) ──┘
 ```
 
 
 
-### Step 0 — Fetch DAMIT shape models  (`pyleader-download-models` if in the virtual environment or `python scripts/download_models.py` if not)
+### Step 1 — Fetch DAMIT shape models
+
+```sh
+pyleader-download-models           # inside a virtual environment
+python scripts/download_models.py  # outside a virtual environment
+```
 
 - **What it does:** 
 downloads the representative DAMIT shape models the synthetic step needs. Run
@@ -123,108 +128,135 @@ once after cloning. The model *listing* (`asteroideja.txt`) ships with the packa
 themselves (~29 MB) do not. Since this code connects to the DAMIT database (see References), runtime
 is dependent on the internet connection strength, but on my local laptop with typical home internet
 speeds, it took about 5 minutes to fully refresh all 347 models specified in this repo.  
-- **Input:** 
-none (reads the shipped `asteroideja.txt`; queries the DAMIT database).
-- **Arguments:** 
-`--refresh` re-download every listed model to its latest DAMIT version *(optional;
-default fetches only missing ones)*; 
-`--damit-dir PATH` destination *(default* `damit_models/`*)*.
-- **Output:** 
-`<number>.txt` shape files in `damit_models/`.
+- **Input:**
+  - none (reads the shipped `asteroideja.txt`; queries the DAMIT database).
+- **Arguments:**
+  - `--refresh` re-download every listed model to its latest DAMIT version *(optional; default fetches only missing ones)*
+  - `--damit-dir PATH` destination *(default* `damit_models/`*)*
+- **Output:**
+  - `<number>.txt` shape files in `damit_models/`
 
 
 
-### Step 1 — Build `.obs` files  (`pyleader-build-obs` or `pyleader-population --build` in virtual environment)
+### Step 2 — Build `.obs` files
+
+```sh
+pyleader-build-obs                 # inside a virtual environment
+python scripts/build_obs_files.py  # outside a virtual environment
+
+# a collisional family (integer Nesvorný family ID):
+pyleader-build-obs --famid 1128
+# a background population (BG_<REGION>_<TYPE>types):
+pyleader-build-obs --famid BG_IB_Ctypes --population background
+```
 
 - **What it does:** 
 resolves the population to its member objects, queries NEOWISE @ IPAC for clean
 photometry, and writes one `.obs` file per object (photometry + Sun/observer geometry per point).
-- **Input:** 
-  - membership files under `--base-dir` 
+- **Input:**
+  - membership files under `--base-dir`
   - `AllMBAFamilyMembers.txt` (families) or `BGobjs_<REGION>_<TYPE>type_neowise.txt` (backgrounds)
-  - plus `neowise_mainbelt.csv`.
-- **Arguments:** 
-`--famid ID` integer ID number for the family being analyzed, if not a background subpopulation *(required)*; 
-`--population {family,background}` specify the type of population being analyzed *(default inferred)*;
-`--cat CATALOG` IRSA catalog *(default* `allsky_4band_p1bs_psd`*)*; 
-`--filterpriority {w2,w3}`*(default* `w3`*)*; 
-`--min-obs N` minimum points to keep an object *(int ≥ 1, default 5)*;
-`--legacy-format` write the old block format *(optional; default tabular)*;
-`--obsdir DIR` write the `.obs` files to an exact directory instead of the derived path.
-- **Output:** 
-`<base-dir>/<Fam|>{id}_data_<cat>_<filter>/*.obs` (or `--obsdir` if given).
+  - plus `neowise_mainbelt.csv`
+- **Arguments:**
+  - `--famid ID` the integer Nesvorný family ID (e.g. `1128`), or a `BG_<REGION>_<TYPE>types` id for a background population (e.g. `BG_IB_Ctypes`) *(required)*
+  - `--population {family,background}` type of population *(default* `family`*; set* `background` *for* `BG_*` *ids)*
+  - `--cat CATALOG` IRSA catalog to query — one of `allsky_4band_p1bs_psd` *(default)*, `allsky_3band_p1bs_psd`, or `neowiser_p1bs_psd`
+  - `--filterpriority {w2,w3}` which band's photometry to analyze *(default* `w3`*)*
+  - `--min-obs N` minimum surviving detections to write an object's file *(int ≥ 1, default 5)*
+  - `--istart N` object index to resume from after an interruption *(int ≥ 0, default 0)*
+  - `--legacy-format` write the old block format *(optional; default tabular)*
+  - `--obsdir DIR` write the `.obs` files to an exact directory instead of the derived path
+- **Quality cuts:** for the analyzed band, a detection is kept only if its contamination-and-confusion flag `cc_flags` is clean (`0`, `p`, or `P`), its photometric quality `ph_qual` is `A`, `B`, or `C`, and its artifact flag is `0`; an object's file is written only if at least `--min-obs` detections survive.
+- **Runtime:** roughly ~10 s per catalogued object at typical home-internet speeds (only objects with a NEOWISE/IPAC entry are fetched), limited by connection strength on both ends. A designated population can contain anywhere from ~100 to ~5000 objects, so this step can take many hours for heavily populated groups that NEOWISE also observed frequently.
+- **Output:**
+  - `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/*.obs` (or `--obsdir` if given)
 
 
 
-### Step 2 — Recover the distributions  (`pyleader-analysis`)
+### Step 3 — Recover the distributions
+
+```sh
+pyleader-analysis               # inside a virtual environment
+python scripts/run_analysis.py  # outside a virtual environment
+```
 
 - **What it does:** 
 runs the LEADER inversion over `Ntrials` random draws of the population and writes
 the recovered `(p, β)` distributions with their trial-to-trial spread.
-- **Input:** 
-  - the population's `.obs` directory (from Step 1) + `neowise_mainbelt.csv` for diameters.
-  The directory is derived as `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/`; 
-  use `--obsdir DIR` to read from an exact directory that doesn't follow this naming.
-- **Arguments:** 
-`--famid ID` the integer designation for the collisional family represented by the .obs files *(required)* ; 
-`--diam-low` / `--diam-high` diameter window in km *(≥ 0, low < high; default 5–10)*;** 
-`--ndraws N` **number of real objects to randomly draw from the .obs files per trial *(int ≥ 1, default 1000)*;** 
-`--ntrials N` **number of times to randomly draw** `ndraws` **objects and repeat the analysis *(int ≥ 1, default 100)*;** 
-`--phase-angle-limit DEG` **max solar phase angle *(0–90, default 40)*;** 
-`--wanted N` **min points per apparition *(int ≥ 3, default 5)*;** 
-`--date-tol DAYS` **apparition gap *(> 0, default 60)*; 
-`--population {family,background}`; 
-`--obsdir DIR` read `.obs` from an exact directory; 
-`--forced-n` subsample each object to `wanted` amplitudes; 
-`--overwrite`; 
-`--seed N`.
-- **Output:** 
-`<...>_analysis_<...>_<lo>km_to_<hi>km/` with `SummaryAnalysis_*.txt`, per-`Trial*/` diagnostics, and `Summary_pmax/betamax_*.png`.
+- **Input:**
+  - the population's `.obs` directory (from Step 2) + `neowise_mainbelt.csv` for diameters. The directory is derived as `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/`; use `--obsdir DIR` to read from an exact directory that doesn't follow this naming.
+- **Arguments:**
+  - `--famid ID` the integer designation for the collisional family represented by the .obs files *(required)*
+  - `--diam-low` / `--diam-high` diameter window in km *(≥ 0, low < high; default 5–10)*
+  - `--ndraws N` number of real objects to randomly draw from the .obs files per trial *(int ≥ 1, default 1000)*
+  - `--ntrials N` number of times to randomly draw `ndraws` objects and repeat the analysis *(int ≥ 1, default 100)*
+  - `--phase-angle-limit DEG` max solar phase angle *(0–90, default 40)*
+  - `--wanted N` min points per apparition *(int ≥ 3, default 5)*
+  - `--date-tol DAYS` apparition gap *(> 0, default 60)*
+  - `--population {family,background}`
+  - `--obsdir DIR` read `.obs` from an exact directory
+  - `--forced-n` subsample each object to `wanted` amplitudes
+  - `--overwrite`
+  - `--seed N`
+- **Output:**
+  - `<...>_analysis_<...>_<lo>km_to_<hi>km/` with `SummaryAnalysis_*.txt`, per-`Trial*/` diagnostics, and `Summary_pmax/betamax_*.png`
 
 
 
-### Step 3 — Synthetic sweep  (`pyleader-sweep`; single point: `pyleader-synthetic`)
+### Step 4 — Synthetic sweep
+
+```sh
+pyleader-sweep                     # inside a virtual environment
+python scripts/sweep_synthetic.py  # outside a virtual environment
+
+# single grid point:
+pyleader-synthetic                 # inside a virtual environment
+python scripts/run_synthetic.py    # outside a virtual environment
+```
 
 - **What it does:** 
 builds synthetic populations of *known* `(p, β)` from DAMIT shapes observed at the
 target geometry, runs them through LEADER, and tabulates recovered-vs-assigned statistics across a
 grid of assigned peaks.
-- **Input:** 
-DAMIT models (`damit_models/`) + a geometry source (a directory of `.obs`, or — inside
-`pyleader-population` — the analyzed population's own files).
-- **Arguments:** 
-`--p-peaks P …` assigned elongation peaks *(each* `0 < p ≤ 1`*; default 0.35 0.45 0.55 0.65 0.75)*; 
-`--b-peaks B …` assigned latitude peaks in **radians** *(each* `0 < β < π/2`*; default 0.2 0.5 0.9 1.3)*; 
-`--ndraws N` synthetic objects per grid point *(int ≥ 1, default 1000)*; 
-`--nseeds N` realizations per grid point for error bars *(int ≥ 1, default 1)*;
-`--scattering {ls_lambert,hapke}` *(default* `ls_lambert`*, matching the MATLAB code)*;
-`--geometry-dir PATH`; 
-`--outdir PATH` *(required)*; 
-`--seed N`.
-- **Output:** 
-  - `sweep_stats.csv` (one row per grid point × seed: min/max/mean/median of assigned vs. recovered `p`, `β`)  
-  - `sweep_summary.png`. 
-  `pyleader-plot-sweep <csv>` re-renders the summary.
+- **Input:**
+  - DAMIT models (`damit_models/`) + a geometry source (a directory of `.obs`, or — inside `pyleader-population` — the analyzed population's own files).
+- **Arguments:**
+  - `--p-peaks P …` assigned elongation peaks *(each* `0 < p ≤ 1`*; default 0.35 0.45 0.55 0.65 0.75)*
+  - `--b-peaks B …` assigned latitude peaks in **radians** *(each* `0 < β < π/2`*; default 0.2 0.5 0.9 1.3)*
+  - `--ndraws N` synthetic objects per grid point *(int ≥ 1, default 1000)*
+  - `--nseeds N` realizations per grid point for error bars *(int ≥ 1, default 1)*
+  - `--scattering {ls_lambert,hapke}` *(default* `ls_lambert`*, matching the MATLAB code)*
+  - `--geometry-dir PATH`
+  - `--outdir PATH` *(required)*
+  - `--seed N`
+- **Output:**
+  - `sweep_stats.csv` (one row per grid point × seed: min/max/mean/median of assigned vs. recovered `p`, `β`)
+  - `sweep_summary.png` — `pyleader-plot-sweep <csv>` re-renders the summary
 
 
 
-### Step 4 — Fit the correction  (`pyleader-fit-correction`)
+### Step 5 — Fit the correction
+
+```sh
+pyleader-fit-correction           # inside a virtual environment
+python scripts/fit_correction.py  # outside a virtual environment
+```
 
 - **What it does:** 
 fits the recovered→true mapping (a 2-D quadratic in recovered `p`, `β`) from a
 sweep CSV — the correction to apply to real LEADER output.
-- **Input:** 
-  - a `sweep_stats.csv` from Step 3.
-- **Arguments:** 
-`csv` path *(required)*; 
-`--stat {peak,mean,median}` which statistic to correct *(default* `mean`*; the pipeline uses* `peak`*, matching LEADER's reported pmax/betamax)*; 
-`-o PATH` output JSON.
-- **Output:** 
-  - `correction_function.json` (coefficients + fit diagnostics) and a predicted-vs-true `correction_fit.png`.
+- **Input:**
+  - a `sweep_stats.csv` from Step 4
+- **Arguments:**
+  - `csv` path *(required)*
+  - `--stat {peak,mean,median}` which statistic to correct *(default* `mean`*; the pipeline uses* `peak`*, matching LEADER's reported pmax/betamax)*
+  - `-o PATH` output JSON
+- **Output:**
+  - `correction_function.json` (coefficients + fit diagnostics) and a predicted-vs-true `correction_fit.png`
 
 
 
-### Step 5 — Apply the correction
+### Step 6 — Apply the correction
 
 Apply a fitted (or the shipped default) correction to real LEADER output:
 
@@ -236,12 +268,18 @@ corr = default_correction()                              # shipped with the pack
 p_true, beta_true = apply_correction(p_recovered, beta_recovered_deg, corr)
 ```
 
-`pyleader-compare A.npz B.npz --outdir cmp` reports the L1/L2/L∞ distances between two recovered
-distributions.
+`pyleader-compare A.npz B.npz --outdir cmp` (in a virtual environment) — or
+`python scripts/compare_populations.py A.npz B.npz --outdir cmp` (outside one) — reports the
+L1/L2/L∞ distances between two recovered distributions.
 
-### The whole pipeline  (`pyleader-population`)
+### The whole pipeline
 
-Runs steps 2–5 for one population, deriving the correction from **that population's own** `.obs`
+```sh
+pyleader-population               # inside a virtual environment
+python scripts/run_population.py  # outside a virtual environment
+```
+
+Runs steps 3–6 for one population, deriving the correction from **that population's own** `.obs`
 **observing geometry** (the scientifically appropriate choice, since the geometry — hence the bias —
 differs per dataset):
 
@@ -253,23 +291,20 @@ pyleader-population 1128 --diam-low 1 --diam-high 100
 pyleader-population BG_IB_Ctypes --build
 ```
 
-- **Input:** 
-the population's `.obs` directory (or `--build` to create it) + DAMIT models (`pyleader-download-models`; the run stops early with instructions if they are missing).
-- **Arguments:** 
-the positional population `ID` *(required)*; 
-the Step-2 analysis options: 
-(`--diam-low/-high`, `--ntrials`, `--ndraws`, `--phase-angle-limit`, `--date-tol`, `--wanted`); 
-the Step-3 sweep options: (`--p-peaks`, `--b-peaks`, `--sweep-ndraws`, `--nseeds`, `--scattering`);
-`--correction-stat {peak,mean,median}` *(default* `peak`*)*; 
-`--build`; 
-`--refresh-models` re-download the latest DAMIT models first; 
-`--base-dir PATH`;
-`--obsdir DIR` read/write `.obs` from an exact directory (the correction sweep's geometry follows it); 
-`--seed N`.
-- **Output:** 
-the analysis directory plus `correction_sweep/`, the population-specific
-`correction_function.json` + `correction_fit.png`, and `population_report.txt` (recovered → corrected
-`p`, `β`, with an extrapolation warning when the recovered value falls outside the synthetic range).
+- **Input:**
+  - the population's `.obs` directory (or `--build` to create it) + DAMIT models (`pyleader-download-models`; the run stops early with instructions if they are missing).
+- **Arguments:**
+  - the positional population `ID` *(required)*
+  - the Step-3 analysis options (`--diam-low/-high`, `--ntrials`, `--ndraws`, `--phase-angle-limit`, `--date-tol`, `--wanted`)
+  - the Step-4 sweep options (`--p-peaks`, `--b-peaks`, `--sweep-ndraws`, `--nseeds`, `--scattering`)
+  - `--correction-stat {peak,mean,median}` *(default* `peak`*)*
+  - `--build`
+  - `--refresh-models` re-download the latest DAMIT models first
+  - `--base-dir PATH`
+  - `--obsdir DIR` read/write `.obs` from an exact directory (the correction sweep's geometry follows it)
+  - `--seed N`
+- **Output:**
+  - the analysis directory plus `correction_sweep/`, the population-specific `correction_function.json` + `correction_fit.png`, and `population_report.txt` (recovered → corrected `p`, `β`, with an extrapolation warning when the recovered value falls outside the synthetic range).
 
 
 

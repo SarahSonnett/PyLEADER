@@ -151,23 +151,32 @@ def download_damit_models(numbers, dest, *, refresh=False, timeout=120, verbose=
     num_to_model = _load_number_to_model(timeout)
 
     ok, fail = list(available), []
-    for n in missing:
+    total = len(missing)
+    for i, n in enumerate(missing, 1):
         mid = num_to_model.get(n)
-        if mid is None:
+        if mid is not None:
+            url = _SHAPE_URL.format(model_id=mid)
+            try:
+                text = _fetch_text(url, timeout)
+                with open(os.path.join(dest, f"{n}.txt"), "w") as f:
+                    f.write(text)
+                ok.append(n)
+            except Exception:  # network / 404 / parse
+                fail.append(n)
+        else:
             fail.append(n)
-            continue
-        url = _SHAPE_URL.format(model_id=mid)
-        try:
-            text = _fetch_text(url, timeout)
-            with open(os.path.join(dest, f"{n}.txt"), "w") as f:
-                f.write(text)
-            ok.append(n)
-        except Exception as exc:  # network / 404 / parse
-            if verbose:
-                print(f"  skip {n}: {exc}")
-            fail.append(n)
+        if verbose:
+            got = len(ok) - len(available)
+            # self-overwriting progress bar (carriage return, no newline)
+            print(f"\rDownloading DAMIT models: {i}/{total} ({100.0 * i / total:5.1f}%)"
+                  f"  [{got} downloaded, {len(fail)} unavailable]",
+                  end="", flush=True)
 
     if verbose:
+        print()  # end the progress line
         print(f"Downloaded {len(ok) - len(available)} new models "
               f"({len(ok)} available, {len(fail)} unavailable) in {dest}")
+        if fail:
+            shown = ", ".join(str(x) for x in fail[:20])
+            print(f"  unavailable: {shown}" + (" ..." if len(fail) > 20 else ""))
     return ok

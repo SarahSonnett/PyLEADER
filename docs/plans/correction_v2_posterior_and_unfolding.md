@@ -5,7 +5,7 @@
 
 ## Why (scientific motivation)
 
-The current per-population correction (Stage 3–5) fits a single-valued 2-D quadratic
+The current per-population correction (Steps 4–6) fits a single-valued 2-D quadratic
 `(p_rec, β_rec) → (p_true, β_true)` from the sweep. That captures the *mean* systematic bias but is
 scientifically incomplete:
 
@@ -110,7 +110,7 @@ New `pyleader/synthetic/unfold.py`:
 
 ## Docs / bookkeeping
 
-- README: new "Stage 3b/4b — probabilistic correction" subsection once Phase 1 lands.
+- README: new "Step 4b/5b — probabilistic correction" subsection once Phase 1 lands.
 - Gitignore basis outputs (`basis/` dirs; large, regenerable).
 - Keep quadratic path working throughout (back-compat; comparisons in validation).
 

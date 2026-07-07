@@ -61,7 +61,7 @@ class PopulationConfig:
 
     base_dir: str = None
     # Arbitrary .obs directory (bypasses the naming convention). Used for both
-    # building (Stage 1) and reading (Stage 2), and the sweep geometry follows.
+    # building (Step 2) and reading (Step 3), and the sweep geometry follows.
     obsdir: Optional[str] = None
 
     def __post_init__(self):
