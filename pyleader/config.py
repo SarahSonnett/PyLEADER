@@ -10,6 +10,7 @@ in ``scripts/`` expose every field as a command-line argument.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 # Default location of the WISE/NEOWISE working data on this machine.  The
 # notebooks were executed with this as the working directory, so the input
@@ -57,6 +58,11 @@ class AnalysisConfig:
 
     base_dir: str = DEFAULT_BASE_DIR
 
+    # Point the analysis at an arbitrary directory of .obs files, bypassing the
+    # base_dir/<token>_data_<cat>_<filter> naming convention. When None the
+    # directory is derived from the fields above (the usual case).
+    datadir_override: Optional[str] = None
+
     def __post_init__(self) -> None:
         if self.population_kind not in ("family", "background"):
             raise ValueError(
@@ -76,7 +82,13 @@ class AnalysisConfig:
 
     @property
     def datadir(self) -> str:
-        """Directory of input ``.obs`` files (matches the notebook's ``datadir``)."""
+        """Directory of input ``.obs`` files.
+
+        Returns ``datadir_override`` when set, otherwise the conventional
+        ``base_dir/<token>_data_<cat>_<filter>/`` path.
+        """
+        if self.datadir_override is not None:
+            return self.datadir_override
         return (
             f"{self.base_dir}/{self._famtoken}_data_"
             f"{self.cat}_{self.filterpriority}/"
@@ -133,6 +145,9 @@ class ObsBuildConfig:
 
     base_dir: str = DEFAULT_BASE_DIR
 
+    # Write .obs into an arbitrary directory, bypassing the naming convention.
+    data_dir_override: Optional[str] = None
+
     @property
     def _poptoken(self) -> str:
         """Directory token: ``Fam<famid>`` for families, ``<famid>`` for backgrounds."""
@@ -141,6 +156,8 @@ class ObsBuildConfig:
     @property
     def data_dir(self) -> str:
         """Directory the ``.obs`` files are written to (matches ``AnalysisConfig.datadir``)."""
+        if self.data_dir_override is not None:
+            return self.data_dir_override
         return f"{self.base_dir}/{self._poptoken}_data_{self.cat}_{self.filterpriority}"
 
     @property

@@ -54,6 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--forced-n", dest="forced_n", action="store_true", default=d.forced_n,
                    help="subsample each object to `wanted` amplitudes (forcedN mode)")
     p.add_argument("--base-dir", default=d.base_dir, help="root working directory for inputs/outputs")
+    p.add_argument("--datadir", default=None,
+                   help="read .obs files from this exact directory (bypasses the naming convention)")
     p.add_argument("--seed", type=int, default=None, help="RNG seed for reproducible draws")
     p.add_argument("--show", action="store_true", help="display plots interactively as well as saving")
     return p
@@ -78,6 +80,7 @@ def main(argv=None) -> int:
         population_kind=args.population_kind,
         forced_n=args.forced_n,
         base_dir=args.base_dir,
+        datadir_override=args.datadir,
     )
     print(f"Reading .obs files from: {cfg.datadir}")
     outdir = run_analysis(cfg, seed=args.seed, show=args.show)

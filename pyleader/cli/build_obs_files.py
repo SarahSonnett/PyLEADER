@@ -34,6 +34,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--family-file", default=d.family_file, help="MBA family membership file (name or absolute path)")
     p.add_argument("--neowise-fle", default=d.neowise_fle, help="NEOWISE catalog file (name or absolute path)")
     p.add_argument("--base-dir", default=d.base_dir, help="root working directory for inputs/outputs")
+    p.add_argument("--population", dest="population_kind", choices=("family", "background"),
+                   default=d.population_kind, help="directory-naming scheme / membership source")
+    p.add_argument("--datadir", default=None,
+                   help="write .obs files to this exact directory (bypasses the naming convention)")
+    p.add_argument("--legacy-format", action="store_true", default=d.legacy_format,
+                   help="write .obs in the legacy block format instead of the default tabular format")
     p.add_argument("--curl-only", action="store_true",
                    help="only write the bulk curl-download script, do not query per object")
     return p
@@ -51,6 +57,9 @@ def main(argv=None) -> int:
         family_file=args.family_file,
         neowise_fle=args.neowise_fle,
         base_dir=args.base_dir,
+        population_kind=args.population_kind,
+        data_dir_override=args.datadir,
+        legacy_format=args.legacy_format,
     )
 
     if args.curl_only:
