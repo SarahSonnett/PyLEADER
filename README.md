@@ -134,7 +134,7 @@ default fetches only missing ones)*;
 
 
 
-### Step 1 — Build `.obs` files  (`pyleader-build-obs` or `pyleader-population --build`)
+### Step 1 — Build `.obs` files  (`pyleader-build-obs` or `pyleader-population --build` in virtual environment)
 
 - **What it does:** 
 resolves the population to its member objects, queries NEOWISE @ IPAC for clean
