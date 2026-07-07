@@ -69,7 +69,7 @@ pip install -e .            # editable install from a checkout
 pip install -e ".[obs]"     # also install the .obs-building dependencies
 ```
 
-Core dependencies are `numpy`/`scipy`/`matplotlib`; the `[obs]` extra adds
+This codebase requires Python version >= 3.9 and `numpy`/`scipy`/`matplotlib`; the `[obs]` extra adds
 `astropy`/`sunpy`/`requests`, needed only for **building** `.obs` files (which also requires internet
 access). Installing puts one console command per script on your `PATH`:
 
