@@ -115,12 +115,14 @@ The pipeline flows in steps. `pyleader-population` runs steps **2–5** in one c
 
 
 
-### Step 0 — Fetch DAMIT shape models  (`pyleader-download-models`)
+### Step 0 — Fetch DAMIT shape models  (`pyleader-download-models` if in the virtual environment or `python scripts/download_models.py` if not)
 
 - **What it does:** 
 downloads the representative DAMIT shape models the synthetic step needs. Run
 once after cloning. The model *listing* (`asteroideja.txt`) ships with the package; the models
-themselves (~29 MB) do not.
+themselves (~29 MB) do not. Since this code connects to the DAMIT database (see References), runtime
+is dependent on the internet connection strength, but on my local laptop with typical home internet
+speeds, it took about 5 minutes to fully refresh all 347 models specified in this repo.  
 - **Input:** 
 none (reads the shipped `asteroideja.txt`; queries the DAMIT database).
 - **Arguments:** 
@@ -196,7 +198,9 @@ DAMIT models (`damit_models/`) + a geometry source (a directory of `.obs`, or �
 `--ndraws N` synthetic objects per grid point *(int ≥ 1, default 1000)*; 
 `--nseeds N` realizations per grid point for error bars *(int ≥ 1, default 1)*;
 `--scattering {ls_lambert,hapke}` *(default* `ls_lambert`*, matching the MATLAB code)*;
-`--geometry-dir PATH`; `--outdir PATH` *(required)*; `--seed N`.
+`--geometry-dir PATH`; 
+`--outdir PATH` *(required)*; 
+`--seed N`.
 - **Output:** 
   - `sweep_stats.csv` (one row per grid point × seed: min/max/mean/median of assigned vs. recovered `p`, `β`)  
   - `sweep_summary.png`. 
