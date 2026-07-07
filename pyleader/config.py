@@ -35,8 +35,8 @@ class AnalysisConfig:
     famid: str = "3815"                     # family / population to explore
     cat: str = "allsky_4band_p1bs_psd"      # catalog used to generate the .obs files
     filterpriority: str = "w3"              # photometry filter to analyze
-    diam_low: float = 5.0                   # lower diameter limit of sample (km)
-    diam_high: float = 10.0                 # upper diameter limit of sample (km)
+    diam_low: float = 3.0                   # lower diameter limit of sample (km)
+    diam_high: float = 5.0                  # upper diameter limit of sample (km)
 
     # --- statistics / tolerances ---
     phase_angle_limit: float = 40.0         # upper solar phase-angle limit (deg)
@@ -106,6 +106,16 @@ class AnalysisConfig:
             f"{self.cat}_{self.filterpriority}_"
             f"{self.diam_low}km_to_{self.diam_high}km"
         )
+
+    @property
+    def diam_tag(self) -> str:
+        """Diameter-range label used in output filenames (e.g. ``3.0km_to_5.0km``)."""
+        return f"{self.diam_low}km_to_{self.diam_high}km"
+
+    @property
+    def summary_name(self) -> str:
+        """Filename of the per-trial summary table (id + diameter range)."""
+        return f"SummaryAnalysis_Famid{self.famid}_{self.diam_tag}.txt"
 
     @property
     def neowise_path(self) -> str:

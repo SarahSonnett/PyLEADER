@@ -165,11 +165,16 @@ photometry, and writes one `.obs` file per object (photometry + Sun/observer geo
   - `--min-obs N` minimum surviving detections to write an object's file *(int ≥ 1, default 5)*
   - `--istart N` object index to resume from after an interruption *(int ≥ 0, default 0)*
   - `--legacy-format` write the old block format *(optional; default tabular)*
+  - `--base-dir PATH` the root working directory — membership/catalog files are read from it and
+    the data/analysis directories are created beneath it. It is optional on every command; the
+    default is the `DEFAULT_BASE_DIR` constant in `pyleader/config.py` (set for the author's
+    machine), so on a new machine either pass `--base-dir` explicitly or edit that constant once.
   - `--obsdir DIR` write the `.obs` files to an exact directory instead of the derived path
 - **Quality cuts:** for the analyzed band, a detection is kept only if its contamination-and-confusion flag `cc_flags` is clean (`0`, `p`, or `P`), its photometric quality `ph_qual` is `A`, `B`, or `C`, and its artifact flag is `0`; an object's file is written only if at least `--min-obs` detections survive.
 - **Runtime:** roughly ~10 s per catalogued object at typical home-internet speeds (only objects with a NEOWISE/IPAC entry are fetched), limited by connection strength on both ends. A designated population can contain anywhere from ~100 to ~5000 objects, so this step can take many hours for heavily populated groups that NEOWISE also observed frequently.
 - **Output:**
-  - `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/*.obs` (or `--obsdir` if given)
+  - `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/*.obs` (or `--obsdir` if given). The command prints
+    the exact directory it wrote to when it finishes.
 
 
 
@@ -181,25 +186,45 @@ python scripts/run_analysis.py  # outside a virtual environment
 ```
 
 - **What it does:** 
-runs the LEADER inversion over `Ntrials` random draws of the population and writes
-the recovered `(p, β)` distributions with their trial-to-trial spread.
+performs the **core LEADER analysis** — the regularized inversion of the pooled amplitude
+statistics — over `ntrials` random draws of the population, writing the recovered `(p, β)`
+distributions with their trial-to-trial spread. Note that this step produces the **raw** recovered
+distributions only: it does not assess the systematic bias or model the uncertainties. The full
+Steps 3–6 chain is needed for bias-corrected results.
+- **`ndraws` vs `ntrials`:** one *trial* = draw `ndraws` objects at random (with replacement) from
+  the population's `.obs` files, pool their lightcurve amplitudes into a single CDF, and run one
+  LEADER inversion on it. `ndraws` therefore sets the *statistical size of each sample*, while
+  `ntrials` sets *how many times that whole experiment is repeated* (with independent random
+  draws) — the scatter of the recovered peaks across trials is what provides the spread on the
+  result. Total inversions = `ntrials`; total object draws = `ntrials × ndraws`.
 - **Input:**
   - the population's `.obs` directory (from Step 2) + `neowise_mainbelt.csv` for diameters. The directory is derived as `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/`; use `--obsdir DIR` to read from an exact directory that doesn't follow this naming.
 - **Arguments:**
   - `--famid ID` the integer designation for the collisional family represented by the .obs files *(required)*
-  - `--diam-low` / `--diam-high` diameter window in km *(≥ 0, low < high; default 5–10)*
-  - `--ndraws N` number of real objects to randomly draw from the .obs files per trial *(int ≥ 1, default 1000)*
-  - `--ntrials N` number of times to randomly draw `ndraws` objects and repeat the analysis *(int ≥ 1, default 100)*
+  - `--diam-low` / `--diam-high` diameter window in km *(≥ 0, low < high; default 3–5)*
+  - `--ndraws N` objects randomly drawn from the .obs files per trial *(int ≥ 1, default 1000; see above)*
+  - `--ntrials N` number of independent repeat experiments *(int ≥ 1, default 100; see above)*
   - `--phase-angle-limit DEG` max solar phase angle *(0–90, default 40)*
   - `--wanted N` min points per apparition *(int ≥ 3, default 5)*
   - `--date-tol DAYS` apparition gap *(> 0, default 60)*
   - `--population {family,background}`
   - `--obsdir DIR` read `.obs` from an exact directory
+  - `--base-dir PATH` root working directory (see the note under Step 2)
   - `--forced-n` subsample each object to `wanted` amplitudes
   - `--overwrite`
   - `--seed N`
+- **Runtime:** ~3 s per trial at the default `ndraws=1000` (Apple-silicon laptop; no network) —
+  about **5–6 minutes** for the default 100 trials, scaling roughly linearly with
+  `ntrials × ndraws`. If a run takes far longer than this, something is likely wrong (e.g. an
+  unexpectedly empty or malformed `.obs` directory).
+- **Progress & logging:** the terminal shows a single self-updating progress bar
+  (`trial k/N (xx%)`); the full run record — configuration, per-trial results, and timestamps —
+  is written to `analysis.log` inside the output directory.
 - **Output:**
-  - `<...>_analysis_<...>_<lo>km_to_<hi>km/` with `SummaryAnalysis_*.txt`, per-`Trial*/` diagnostics, and `Summary_pmax/betamax_*.png`
+  - `<...>_analysis_<...>_<lo>km_to_<hi>km/` with `SummaryAnalysis_Famid<id>_<lo>km_to_<hi>km.txt`,
+    `analysis.log`, per-`Trial*/` diagnostics, `Summary_pmax/betamax_Famid<id>_<lo>km_to_<hi>km.png`,
+    and the population marginal DFs (`DF_p_all`, `DF_b_all` `.png`/`.txt`). The command prints the
+    output directory when it finishes.
 
 
 

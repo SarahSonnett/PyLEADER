@@ -173,9 +173,9 @@ def plot_alltrials(dist: np.ndarray, ttle: str, pltname: str, outdir: str, *, sh
     plt.close()
 
 
-def _population_counts(outdir: str, famid: str):
+def _population_counts(outdir: str, cfg: AnalysisConfig):
     """Median (N_obj, AvgPointsPerObj) across trials, from the summary file."""
-    summary = f"{outdir}/SummaryAnalysis_Famid{famid}.txt"
+    summary = f"{outdir}/{cfg.summary_name}"
     try:
         nobj, npoints = np.genfromtxt(summary, unpack=True, usecols=(4, 5), dtype=float, skip_header=1)
         return float(np.median(np.atleast_1d(nobj))), float(np.median(np.atleast_1d(npoints)))
@@ -202,7 +202,7 @@ def plot_population_df(outdir: str, cfg: AnalysisConfig, *, show: bool = False) 
         P.append(pf); DFP.append(dfpf); B.append(bf); DFB.append(dfbf)
     P, DFP, B, DFB = np.array(P), np.array(DFP), np.array(B), np.array(DFB)
 
-    nobj, npoints = _population_counts(outdir, cfg.famid)
+    nobj, npoints = _population_counts(outdir, cfg)
     title = (f"{cfg.famid}, {int(cfg.diam_low)}" + r"$\leq$" + " D (km) < "
              + f"{int(cfg.diam_high)},\n{int(nobj)} objects, "
              + f"{round(npoints, 2)} data points per object")

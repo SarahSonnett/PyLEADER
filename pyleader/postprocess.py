@@ -19,9 +19,11 @@ def leader_postprocess_WISE(
     *,
     allow_p_spread: bool = False,
     show: bool = False,
+    verbose: bool = True,
 ) -> None:
     """Damp the solution away from its peak and write the smoothed contour plot."""
-    print("Smoothing the solution...")
+    if verbose:
+        print("Smoothing the solution...")
 
     W, P, BETA = result.W, result.P, result.BETA
 

@@ -8,6 +8,7 @@ flags, so this one driver reproduces all of them.
 
 from __future__ import annotations
 
+import datetime
 import os
 import random
 import shutil
@@ -84,7 +85,7 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
         shutil.rmtree(outdir)
         os.mkdir(outdir)
 
-    summary_path = f"{outdir}/SummaryAnalysis_Famid{famid}.txt"
+    summary_path = f"{outdir}/{cfg.summary_name}"
     if cfg.overwrite:
         wfile = open(summary_path, "w+")
         wfile.write(
@@ -96,8 +97,20 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
 
     Ndraws = cfg.Ndraws
 
+    # Full run log in the output directory; the terminal shows a progress bar only.
+    log = open(f"{outdir}/analysis.log", "w")
+    log.write(f"# LEADER analysis — {famid} ({cfg.population_kind})\n")
+    log.write(f"# started {datetime.datetime.now().isoformat(timespec='seconds')}\n")
+    log.write(f"# cat={cfg.cat} filter={cfg.filterpriority} "
+              f"diam=[{cfg.diam_low},{cfg.diam_high}] km Ntrials={cfg.Ntrials} "
+              f"Ndraws={Ndraws} seed={seed}\n")
+    log.write(f"# datadir={datadir}\n# outdir={outdir}\n\n")
+    log.write("Trial  Pmax      Betamax(deg)  Relerr    N_obj\n")
+    log.flush()
+
     for trial in range(cfg.Ntrials):
-        print(f"Trial {trial + 1} of {cfg.Ntrials}")
+        print(f"\r[{famid}] LEADER analysis: trial {trial + 1}/{cfg.Ntrials} "
+              f"({100.0 * (trial + 1) / cfg.Ntrials:4.0f}%)", end="", flush=True)
 
         trialdir = f"{outdir}/Trial{trial + 1}"
         if cfg.overwrite:
@@ -147,7 +160,7 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
         Asort = np.sort(A_tot)
         CDFA = np.linspace(1 / len(Asort), 1, len(Asort))
 
-        result = leader_invert(Asort, CDFA)
+        result = leader_invert(Asort, CDFA, verbose=False)
 
         Nobjs = len(set(Objects_drawn))
 
@@ -166,6 +179,10 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
             )
         )
         wfile.flush()
+        log.write("%5s  %.5f  %10.4f  %.4f  %5i\n"
+                  % (trial + 1, result.pmax, result.betamax * (180.0 / np.pi),
+                     result.relerr, Nobjs))
+        log.flush()
 
         if cfg.convert2degrees:
             result.BETA = np.rad2deg(result.BETA)
@@ -173,18 +190,22 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
             result.betamax = np.rad2deg(result.betamax)
 
         leader_plots(result, cfg, outdir, trial, show=show)
-        leader_postprocess_WISE(result, outdir, trial, show=show)
+        leader_postprocess_WISE(result, outdir, trial, show=show, verbose=False)
 
     wfile.close()
+    print()  # finish the progress-bar line
+    log.write(f"\n# completed {cfg.Ntrials} trials at "
+              f"{datetime.datetime.now().isoformat(timespec='seconds')}\n")
+    log.close()
 
     # --- summary plots over all trials ---
     trials, pmax_all, betamax_all, relerr_all = np.genfromtxt(
         summary_path, unpack=True, dtype=float, usecols=(0, 1, 2, 3)
     )
     plot_alltrials(betamax_all, "Peak of " + r"$\beta$" + " distribution",
-                   f"Summary_betamax_Famid{famid}", outdir, show=show)
+                   f"Summary_betamax_Famid{famid}_{cfg.diam_tag}", outdir, show=show)
     plot_alltrials(pmax_all, "Peak of p distribution",
-                   f"Summary_pmax_Famid{famid}", outdir, show=show)
+                   f"Summary_pmax_Famid{famid}_{cfg.diam_tag}", outdir, show=show)
 
     # population-level marginal DFs of p and beta (DF_p_all/DF_b_all .png + .txt)
     plot_population_df(outdir, cfg, show=show)

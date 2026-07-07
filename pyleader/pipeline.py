@@ -38,8 +38,8 @@ class PopulationConfig:
     population_kind: Optional[str] = None      # inferred from pop_id if None
     cat: str = "allsky_4band_p1bs_psd"
     filterpriority: str = "w3"
-    diam_low: float = 5.0
-    diam_high: float = 10.0
+    diam_low: float = 3.0
+    diam_high: float = 5.0
 
     # analysis
     Ntrials: int = 100
@@ -125,9 +125,9 @@ def _require_damit_models() -> None:
         )
 
 
-def _recovered_peak(analysis_outdir: str, pop_id: str):
+def _recovered_peak(analysis_outdir: str, acfg: AnalysisConfig):
     """Average LEADER peak (pmax, betamax_deg) across trials from the summary file."""
-    summary = os.path.join(analysis_outdir, f"SummaryAnalysis_Famid{pop_id}.txt")
+    summary = os.path.join(analysis_outdir, acfg.summary_name)
     pmax, betamax = np.genfromtxt(summary, unpack=True, usecols=(1, 2), dtype=float, skip_header=1)
     return float(np.mean(np.atleast_1d(pmax))), float(np.mean(np.atleast_1d(betamax)))
 
@@ -159,7 +159,7 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     # 2. LEADER analysis on the real data
     print(f"[{cfg.pop_id}] LEADER analysis ...")
     outdir = run_analysis(acfg, seed=seed)
-    rec_p, rec_b = _recovered_peak(outdir, cfg.pop_id)
+    rec_p, rec_b = _recovered_peak(outdir, acfg)
 
     # 3. synthetic sweep on THIS population's observing geometry
     geom = diameter_matched_files(acfg)
