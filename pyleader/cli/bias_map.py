@@ -9,14 +9,17 @@ assigned vs. recovered p and beta distributions (beta in degrees), plus a
 
 Example::
 
-    python scripts/sweep_synthetic.py \
-        --p-peaks 0.4 0.5 0.6 --b-peaks 0.2 0.4 0.8 1.2 \
+    python scripts/bias_map.py \
+        --p-peaks 0.4 0.5 0.6 --b-peaks 10 30 50 75 \
         --ndraws 1000 --nseeds 3 --seed 0 --outdir ~/synthetic_sweep
+
+(``--b-peaks`` are in degrees; they are converted to radians internally.)
 """
 
 from __future__ import annotations
 
 import argparse
+import math
 import os
 
 os.environ.setdefault("MPLBACKEND", "Agg")
@@ -29,7 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     d = SyntheticConfig()
     p = argparse.ArgumentParser(description="Sweep synthetic validation over a (p_peak, b_peak) grid.")
     p.add_argument("--p-peaks", type=float, nargs="+", required=True, help="assigned p peaks")
-    p.add_argument("--b-peaks", type=float, nargs="+", required=True, help="assigned beta peaks (radians)")
+    p.add_argument("--b-peaks", type=float, nargs="+", required=True,
+                   help="assigned beta peaks in DEGREES (0 < beta < 90)")
     p.add_argument("--ndraws", type=int, default=d.Ndraws, help="objects per trial")
     p.add_argument("--scattering", choices=("ls_lambert", "hapke"), default=d.scattering)
     p.add_argument("--damit-dir", default=d.damit_dir)
@@ -48,7 +52,9 @@ def main(argv=None) -> int:
         Ndraws=args.ndraws, scattering=args.scattering, damit_dir=args.damit_dir,
         geometry_dir=args.geometry_dir, damit_list=args.damit_list, base_dir=args.base_dir,
     )
-    csv_path = run_sweep(base_cfg, args.p_peaks, args.b_peaks,
+    # CLI takes beta in degrees; internal configs/math use radians.
+    b_peaks_rad = [math.radians(b) for b in args.b_peaks]
+    csv_path = run_sweep(base_cfg, args.p_peaks, b_peaks_rad,
                          nseeds=args.nseeds, seed=args.seed, outdir=args.outdir)
     print(f"\nSweep complete.\n  per-trial stats: {csv_path}"
           f"\n  summary plot:    {os.path.join(args.outdir, 'sweep_summary.png')}")

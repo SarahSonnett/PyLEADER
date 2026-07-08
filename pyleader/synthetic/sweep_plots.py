@@ -1,6 +1,6 @@
 """Summarize a synthetic sweep: recovered vs. assigned as a 2-panel figure.
 
-Reads a ``sweep_stats.csv`` (from ``scripts/sweep_synthetic.py``) and plots, per
+Reads a ``sweep_stats.csv`` (from ``scripts/bias_map.py``) and plots, per
 trial, the recovered vs. assigned distribution means as a function of the two
 assigned input parameters:
 

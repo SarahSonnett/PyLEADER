@@ -1,6 +1,6 @@
 """Run a synthetic sweep over a (p_peak, b_peak) grid and tabulate the stats.
 
-Shared by ``scripts/sweep_synthetic.py`` and the per-population pipeline.
+Shared by ``scripts/bias_map.py`` and the per-population pipeline.
 """
 
 from __future__ import annotations
@@ -42,10 +42,10 @@ def run_sweep(base_cfg: SyntheticConfig, p_peaks, b_peaks, *,
     rows = []
     run_idx = 0
     for i, (p_peak, b_peak) in enumerate(grid):
-        base = os.path.join(outdir, f"trial{i:03d}_p{p_peak:.2f}_b{b_peak:.2f}")
+        # directory names carry beta in degrees (more intuitive for users)
+        base = os.path.join(outdir, f"trial{i:03d}_p{p_peak:.2f}_b{np.rad2deg(b_peak):.0f}deg")
         if verbose:
-            print(f"\n=== trial {i}: p_peak={p_peak}, b_peak={b_peak} rad "
-                  f"({np.rad2deg(b_peak):.1f} deg)")
+            print(f"\n=== trial {i}: p_peak={p_peak}, b_peak={np.rad2deg(b_peak):.1f} deg")
         for s in range(nseeds):
             subdir = base if nseeds == 1 else os.path.join(base, f"seed{s}")
             cfg = replace(base_cfg, p_peak=p_peak, b_peak=b_peak, outdir=subdir)

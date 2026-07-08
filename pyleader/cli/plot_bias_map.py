@@ -5,7 +5,7 @@ Produces the 2-panel recovered-vs-assigned figure without re-running the sweep.
 
 Example::
 
-    python scripts/plot_sweep.py ~/synthetic_sweep/sweep_stats.csv
+    python scripts/plot_bias_map.py ~/bias_map/sweep_stats.csv
 """
 
 from __future__ import annotations

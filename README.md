@@ -57,7 +57,7 @@ population's most likely `(p, β)`; repeating the experiment over many random dr
 
 **4. Bias correction (this package's main addition).** LEADER's recovered `(p, β)` is biased, and the
 bias depends on the observing geometry — so it differs from dataset to dataset. PyLEADER therefore
-derives a **per-population correction**: it builds synthetic populations of known `(p, β)` observed
+derives a **per-population correction**: it builds synthetic populations of assigned `(p, β)` observed
 at the *same population's* cadence/geometry, measures how LEADER recovers them, and fits a
 recovered→true mapping to apply to the real result. This per-trial error determination and
 correction machinery are the enhancements used in Sonnett, Lilly & Grav (2025).
@@ -80,10 +80,10 @@ access). Installing puts one console command per script on your `PATH`:
 | `pyleader-download-models` | `python scripts/download_models.py`     |
 | `pyleader-build-obs`       | `python scripts/build_obs_files.py`     |
 | `pyleader-analysis`        | `python scripts/run_analysis.py`        |
-| `pyleader-synthetic`       | `python scripts/run_synthetic.py`       |
-| `pyleader-sweep`           | `python scripts/sweep_synthetic.py`     |
+| `pyleader-spot-check`      | `python scripts/spot_check.py`          |
+| `pyleader-bias-map`        | `python scripts/bias_map.py`            |
 | `pyleader-fit-correction`  | `python scripts/fit_correction.py`      |
-| `pyleader-plot-sweep`      | `python scripts/plot_sweep.py`          |
+| `pyleader-plot-bias-map`   | `python scripts/plot_bias_map.py`       |
 | `pyleader-compare`         | `python scripts/compare_populations.py` |
 
 
@@ -104,7 +104,7 @@ The pipeline flows in steps. `pyleader-population` runs steps **3–6** in one c
          │
    [3] pyleader-analysis             LEADER inversion → recovered (p, β) + spread
          │
-   [4] pyleader-sweep                synthetic (p,β) grid on THIS population's geometry
+   [4] pyleader-bias-map             synthetic (p,β) grid on THIS population's geometry
          │
    [5] pyleader-fit-correction       fit recovered→true correction_function.json
          │
@@ -231,32 +231,51 @@ Steps 3–6 chain is needed for bias-corrected results.
 ### Step 4 — Synthetic sweep
 
 ```sh
-pyleader-sweep                     # inside a virtual environment
-python scripts/sweep_synthetic.py  # outside a virtual environment
+pyleader-bias-map                  # inside a virtual environment
+python scripts/bias_map.py         # outside a virtual environment
 
 # single grid point:
-pyleader-synthetic                 # inside a virtual environment
-python scripts/run_synthetic.py    # outside a virtual environment
+pyleader-spot-check                # inside a virtual environment
+python scripts/spot_check.py       # outside a virtual environment
 ```
 
 - **What it does:** 
-builds synthetic populations of *known* `(p, β)` from DAMIT shapes observed at the
-target geometry, runs them through LEADER, and tabulates recovered-vs-assigned statistics across a
-grid of assigned peaks.
+builds synthetic populations with *assigned* `(p, β)` distributions from DAMIT shapes observed at
+the target geometry, runs them through LEADER, and tabulates recovered-vs-assigned statistics
+across a grid of assigned peaks.
+- **`pyleader-bias-map` vs `pyleader-spot-check`:** the **bias map** runs one synthetic experiment per
+  point of an assigned `(p_peak, β_peak)` **grid** (× `nseeds` realizations) and tabulates the
+  results — its purpose is to *map the recovery bias across parameter space*, producing the table
+  the Step-5 correction is fit from. **`pyleader-spot-check`** runs a **single** experiment at one
+  assigned `(p, β)` and keeps that run's full diagnostics — its purpose is *inspection*: spot-check
+  how well LEADER recovers one assigned distribution, debug scattering/geometry choices, or
+  illustrate the method. The sweep calls the same single-run machinery internally.
 - **Input:**
-  - DAMIT models (`damit_models/`) + a geometry source (a directory of `.obs`, or — inside `pyleader-population` — the analyzed population's own files).
+  - DAMIT models (`damit_models/`, from Step 1)
+  - a geometry source: a directory of real `.obs` files whose observing cadence/geometry the
+    synthetic objects are "observed" with (see `--geometry-dir` below; inside
+    `pyleader-population` this is automatically the analyzed population's own files).
 - **Arguments:**
-  - `--p-peaks P …` assigned elongation peaks *(each* `0 < p ≤ 1`*; default 0.35 0.45 0.55 0.65 0.75)*
-  - `--b-peaks B …` assigned latitude peaks in **radians** *(each* `0 < β < π/2`*; default 0.2 0.5 0.9 1.3)*
+  - `--p-peaks P …` assigned elongation peaks *(each* `0 < p ≤ 1`*; required for the sweep;
+    pipeline default 0.35 0.45 0.55 0.65 0.75)*
+  - `--b-peaks B …` assigned latitude peaks in **degrees** *(each* `0 < β < 90`*; required for the
+    sweep; pipeline default 10 30 50 75; converted to radians internally)*
   - `--ndraws N` synthetic objects per grid point *(int ≥ 1, default 1000)*
   - `--nseeds N` realizations per grid point for error bars *(int ≥ 1, default 1)*
   - `--scattering {ls_lambert,hapke}` *(default* `ls_lambert`*, matching the MATLAB code)*
-  - `--geometry-dir PATH`
-  - `--outdir PATH` *(required)*
+  - `--geometry-dir PATH` directory of real `.obs` files supplying the observing geometry
+    *(default: the WISE 3-band subset shipped with the original LEADER release — a path constant
+    in* `pyleader/synthetic/config.py` *set for the author's machine; pass it explicitly on other
+    machines, or let* `pyleader-population` *use the population's own files)*
+  - `--outdir PATH` *(required for the bias map; for* `pyleader-spot-check` *it defaults to*
+    `<base-dir>/synthetic_validation_p<P>_b<B>deg`*)*
   - `--seed N`
 - **Output:**
-  - `sweep_stats.csv` (one row per grid point × seed: min/max/mean/median of assigned vs. recovered `p`, `β`)
-  - `sweep_summary.png` — `pyleader-plot-sweep <csv>` re-renders the summary
+  - `sweep_stats.csv` (one row per grid point × seed: min/max/mean/median of assigned vs. recovered
+    `p`, `β`). CSV rather than plain text because it is the machine-readable input to Step 5, read
+    by column name; it also opens directly in Excel/pandas.
+  - `sweep_summary.png` — `pyleader-plot-bias-map <csv>` re-renders the summary
+  - per-grid-point subdirectories named `trial<i>_p<P>_b<B>deg/` with the single-run diagnostics
 
 
 

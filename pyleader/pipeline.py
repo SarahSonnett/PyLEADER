@@ -51,9 +51,10 @@ class PopulationConfig:
     overwrite: bool = True
     neowise_fle: str = "neowise_mainbelt.csv"
 
-    # synthetic sweep (correction)
+    # synthetic sweep (correction). b_peaks are in RADIANS at the config/API
+    # level (all internal math is radians); the CLIs accept degrees and convert.
     p_peaks: tuple = (0.35, 0.45, 0.55, 0.65, 0.75)
-    b_peaks: tuple = (0.2, 0.5, 0.9, 1.3)
+    b_peaks: tuple = tuple(np.deg2rad((10.0, 30.0, 50.0, 75.0)))
     sweep_ndraws: int = 1000
     nseeds: int = 1
     scattering: str = "ls_lambert"

@@ -10,15 +10,16 @@ Needs DAMIT shape models (see ``--download``) and WISE geometry .obs files.
 Examples::
 
     # download the models listed in asteroideja.txt, then run
-    python scripts/run_synthetic.py --download --p-peak 0.5 --b-peak 0.4 --seed 0
+    python scripts/spot_check.py --download --p-peak 0.5 --b-peak 25 --seed 0
 
     # quick run against already-downloaded models
-    python scripts/run_synthetic.py --p-peak 0.6 --b-peak 0.3 --ndraws 200 --seed 1
+    python scripts/spot_check.py --p-peak 0.6 --b-peak 17 --ndraws 200 --seed 1
 """
 
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 
@@ -32,7 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
     d = SyntheticConfig()
     p = argparse.ArgumentParser(description="Run a synthetic LEADER validation experiment.")
     p.add_argument("--p-peak", type=float, default=None, help="assigned shape-elongation peak (random if unset)")
-    p.add_argument("--b-peak", type=float, default=None, help="assigned spin-latitude peak in radians (random if unset)")
+    p.add_argument("--b-peak", type=float, default=None,
+                   help="assigned spin-latitude peak in DEGREES, 0-90 (random if unset)")
     p.add_argument("--ndraws", type=int, default=d.Ndraws, help="number of synthetic objects")
     p.add_argument("--wanted", type=int, default=d.wanted, help="min points per apparition")
     p.add_argument("--date-tol", type=float, default=d.date_tol, help="max JD gap within an apparition")
@@ -55,8 +57,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    # CLI takes beta in degrees; internal configs/math use radians.
+    b_peak_rad = math.radians(args.b_peak) if args.b_peak is not None else None
     cfg = SyntheticConfig(
-        p_peak=args.p_peak, b_peak=args.b_peak, Ndraws=args.ndraws, wanted=args.wanted,
+        p_peak=args.p_peak, b_peak=b_peak_rad, Ndraws=args.ndraws, wanted=args.wanted,
         date_tol=args.date_tol, phase_angle_limit=args.phase_angle_limit,
         noise_level=args.noise_level, scattering=args.scattering,
         trot_min_hr=args.trot_min_hr, trot_max_hr=args.trot_max_hr,

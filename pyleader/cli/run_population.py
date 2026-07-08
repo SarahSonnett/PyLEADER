@@ -21,6 +21,7 @@ Examples::
 from __future__ import annotations
 
 import argparse
+import math
 import os
 
 os.environ.setdefault("MPLBACKEND", "Agg")
@@ -44,7 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--date-tol", type=float, default=d.date_tol)
     p.add_argument("--wanted", type=int, default=d.wanted)
     p.add_argument("--p-peaks", type=float, nargs="+", default=list(d.p_peaks))
-    p.add_argument("--b-peaks", type=float, nargs="+", default=list(d.b_peaks))
+    p.add_argument("--b-peaks", type=float, nargs="+", default=[10.0, 30.0, 50.0, 75.0],
+                   help="assigned beta peaks in DEGREES (0 < beta < 90)")
     p.add_argument("--sweep-ndraws", type=int, default=d.sweep_ndraws)
     p.add_argument("--nseeds", type=int, default=d.nseeds)
     p.add_argument("--scattering", choices=("ls_lambert", "hapke"), default=d.scattering)
@@ -66,7 +68,9 @@ def main(argv=None) -> int:
         pop_id=a.pop_id, population_kind=a.population_kind, cat=a.cat,
         filterpriority=a.filterpriority, diam_low=a.diam_low, diam_high=a.diam_high,
         Ntrials=a.ntrials, Ndraws=a.ndraws, phase_angle_limit=a.phase_angle_limit,
-        date_tol=a.date_tol, wanted=a.wanted, p_peaks=tuple(a.p_peaks), b_peaks=tuple(a.b_peaks),
+        date_tol=a.date_tol, wanted=a.wanted, p_peaks=tuple(a.p_peaks),
+        # CLI takes beta in degrees; the config/API level uses radians.
+        b_peaks=tuple(math.radians(b) for b in a.b_peaks),
         sweep_ndraws=a.sweep_ndraws, nseeds=a.nseeds, scattering=a.scattering,
         correction_stat=a.correction_stat, base_dir=a.base_dir, obsdir=a.obsdir,
     )

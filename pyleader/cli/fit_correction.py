@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Fit and record a bias-correction function from a synthetic sweep.
 
-Reads a ``sweep_stats.csv`` (from ``scripts/sweep_synthetic.py``), fits the
+Reads a ``sweep_stats.csv`` (from ``scripts/bias_map.py``), fits the
 recovered->true correction surfaces for p and beta, writes the coefficients to
 ``correction_function.json``, and saves a predicted-vs-actual diagnostic plot.
 

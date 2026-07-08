@@ -27,10 +27,10 @@ pyleader-population      = "pyleader.cli.run_population:main"
 pyleader-download-models = "pyleader.cli.download_models:main"
 pyleader-analysis        = "pyleader.cli.run_analysis:main"
 pyleader-build-obs       = "pyleader.cli.build_obs_files:main"
-pyleader-synthetic       = "pyleader.cli.run_synthetic:main"
+pyleader-spot-check      = "pyleader.cli.spot_check:main"
 pyleader-compare         = "pyleader.cli.compare_populations:main"
-pyleader-sweep           = "pyleader.cli.sweep_synthetic:main"
-pyleader-plot-sweep      = "pyleader.cli.plot_sweep:main"
+pyleader-bias-map        = "pyleader.cli.bias_map:main"
+pyleader-plot-bias-map   = "pyleader.cli.plot_bias_map:main"
 pyleader-fit-correction  = "pyleader.cli.fit_correction:main"
 
 [tool.setuptools.packages.find]

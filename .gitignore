@@ -217,7 +217,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# DAMIT shape models (regenerable via scripts/run_synthetic.py --download; ~29 MB)
+# DAMIT shape models (regenerable via pyleader-download-models / scripts/download_models.py; ~29 MB)
 /damit_models/
 
 # macOS Finder artifacts

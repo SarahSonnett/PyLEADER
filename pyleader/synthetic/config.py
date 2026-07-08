@@ -6,6 +6,7 @@ of the MATLAB ``leader_synth_main_WISE.m`` and its helpers.
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -37,6 +38,8 @@ class SyntheticConfig:
 
     # --- assigned (true) distribution peaks ---
     # None => randomized per the MATLAB rules (0.6*rand+0.35 for p, 1.5*rand+0.05 for beta).
+    # NOTE: b_peak is in RADIANS at the config/API level (all internal math is
+    # radians); the command-line interfaces accept degrees and convert.
     p_peak: Optional[float] = None
     b_peak: Optional[float] = None
 
@@ -89,5 +92,5 @@ class SyntheticConfig:
             return self.outdir
         tag = ""
         if self.p_peak is not None and self.b_peak is not None:
-            tag = f"_p{self.p_peak:.2f}_b{self.b_peak:.2f}"
+            tag = f"_p{self.p_peak:.2f}_b{math.degrees(self.b_peak):.0f}deg"
         return f"{self.base_dir}/synthetic_validation{tag}"

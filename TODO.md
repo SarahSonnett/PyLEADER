@@ -11,8 +11,8 @@ A `pyproject.toml` (setuptools) is now in place. Done:
       copy. Verified: the built wheel contains `correction_function.json` and a clean-venv install
       loads it. The CLI logic lives in `pyleader/cli/*` (importable/shippable); `scripts/*.py` are
       thin source-tree shims.
-- [x] Console entry points (`pyleader-analysis`, `pyleader-build-obs`, `pyleader-synthetic`,
-      `pyleader-compare`, `pyleader-sweep`, `pyleader-plot-sweep`, `pyleader-fit-correction`).
+- [x] Console entry points (`pyleader-analysis`, `pyleader-build-obs`, `pyleader-spot-check`,
+      `pyleader-compare`, `pyleader-bias-map`, `pyleader-plot-bias-map`, `pyleader-fit-correction`).
 
 Remaining / nice-to-have:
 
