@@ -328,6 +328,50 @@ p_true, beta_true = apply_correction(p_recovered, beta_recovered_deg, corr)
 `python scripts/compare_populations.py A.npz B.npz --outdir cmp` (outside one) — reports the
 L1/L2/L∞ distances between two recovered distributions.
 
+### Steps 4b–6b — Probabilistic correction (credible intervals) & unfolding
+
+The quadratic correction of Steps 4–6 maps a recovered peak to a **single** corrected value — but
+the p–β degeneracy (e.g. a sphere at β=0 vs. an elongated object seen pole-on) makes the
+recovered→true mapping many-to-one, and the quadratic silently picks one answer. The probabilistic
+path replaces it with a Bayesian inversion of a sampled forward model.
+
+**Step 4b — Build the delta basis** (`pyleader-basis` / `python scripts/basis_runs.py`):
+
+```sh
+pyleader-basis 1128 --diam-low 1 --diam-high 100      # 8×8 grid × 4 seeds (defaults)
+```
+
+- **What it does:** runs near-delta synthetic populations (everything at one assigned `(p, β)`)
+  on a grid of assigned values, at the population's own geometry — the sampled forward model.
+  **Resumable** (completed points are skipped) and **parallel** (all cores by default); a chunk
+  flag `--task k/N` supports cluster job arrays.
+- **Arguments:** `--grid-np/--grid-nb` grid size *(default 8×8)*; `--p-range LO HI` *(default
+  0.30 0.80)*; `--b-range LO HI` in degrees *(default 6 84)*; `--nseeds` *(default 4)*;
+  `--ndraws` *(default 1000)*; `--nproc`; `--task k/N`; `--outdir` *(default
+  `<analysis outdir>_basis`)*; plus the Step-3 population/tolerance options.
+- **Output:** one `gp_p*_b*_seed*/synthetic_result.npz` per unit + `basis_info.json`.
+  Runtime ≈ 21 s per unit single-core → **~10–15 min pooled** for the default 256 units.
+
+**Step 5b — Posterior correction** (inside `pyleader-population`; default `--correction-method both`):
+the recovered peak is inverted through the basis with Bayes' rule, yielding a **posterior over the
+true `(p, β)`** — median, 68%/95% credible intervals, MAP, and a **multimodality flag** where the
+degeneracy admits several answers (reported in `population_report.txt`;
+`posterior_correction.png` + `posterior.npz` are written beside it). The basis is auto-built (and
+auto-resumed) if absent.
+
+**Step 6b — Unfold the full distribution** (`pyleader-unfold` / `python scripts/unfold_analysis.py`):
+
+```sh
+pyleader-unfold <analysis_outdir> --basis <analysis_outdir>_basis
+```
+
+treats the basis as a **response matrix** and inverts the analysis's mean joint solution into an
+estimate of the *true* `f(p, β)` on the basis grid, with 16–84% bands from a perturbation
+ensemble (`unfolded_fpb.npz`/`.png`). *Caveat:* the unfolding assumes the recovered solution of a
+mixture is the mixture of recovered solutions; the regularized inversion violates this mildly
+(measured with the built-in mixture validation), so treat unfolded shapes as indicative and check
+the printed `relerr`.
+
 ### The whole pipeline
 
 ```sh
@@ -354,6 +398,10 @@ pyleader-population BG_IB_Ctypes --build
   - the Step-3 analysis options (`--diam-low/-high`, `--ntrials`, `--ndraws`, `--phase-angle-limit`, `--date-tol`, `--wanted`)
   - the Step-4 bias-map options (`--p-peaks`, `--b-peaks`, `--sweep-ndraws`, `--nseeds`, `--scattering`)
   - `--correction-stat {peak,mean,median}` *(default* `peak`*)*
+  - `--correction-method {quadratic,posterior,both}` which correction(s) to derive *(default*
+    `both`*; posterior auto-builds/resumes the Step-4b delta basis)*
+  - `--basis-dir PATH` *(default* `<analysis outdir>_basis`*)*; `--basis-nseeds N` *(default 4)*;
+    `--basis-nproc N` parallel workers *(default: cores − 2)*
   - `--build`
   - `--refresh-models` re-download the latest DAMIT models first
   - `--base-dir PATH`

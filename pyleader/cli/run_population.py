@@ -51,6 +51,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--nseeds", type=int, default=d.nseeds)
     p.add_argument("--scattering", choices=("ls_lambert", "hapke"), default=d.scattering)
     p.add_argument("--correction-stat", choices=("peak", "mean", "median"), default=d.correction_stat)
+    p.add_argument("--correction-method", choices=("quadratic", "posterior", "both"),
+                   default=d.correction_method,
+                   help="quadratic (bias-map fit), posterior (credible intervals from a delta "
+                        "basis), or both (default)")
+    p.add_argument("--basis-dir", default=None,
+                   help="delta-basis directory (default '<analysis outdir>_basis'; auto-built/"
+                        "resumed when missing)")
+    p.add_argument("--basis-nseeds", type=int, default=d.basis_nseeds,
+                   help="realizations per basis grid point (default 4)")
+    p.add_argument("--basis-nproc", type=int, default=None,
+                   help="parallel workers for the basis (default: cores - 2)")
     p.add_argument("--base-dir", default=None)
     p.add_argument("--obsdir", default=None,
                    help="read/write .obs from this exact directory (bypasses the naming convention); "
@@ -72,7 +83,9 @@ def main(argv=None) -> int:
         # CLI takes beta in degrees; the config/API level uses radians.
         b_peaks=tuple(math.radians(b) for b in a.b_peaks),
         sweep_ndraws=a.sweep_ndraws, nseeds=a.nseeds, scattering=a.scattering,
-        correction_stat=a.correction_stat, base_dir=a.base_dir, obsdir=a.obsdir,
+        correction_stat=a.correction_stat, correction_method=a.correction_method,
+        basis_dir=a.basis_dir, basis_nseeds=a.basis_nseeds, basis_nproc=a.basis_nproc,
+        base_dir=a.base_dir, obsdir=a.obsdir,
     )
     res = run_population(cfg, do_build=a.build, refresh_models=a.refresh_models, seed=a.seed)
     print(f"\nDone. Report + correction in: {res.outdir}")

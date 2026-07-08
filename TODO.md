@@ -22,14 +22,16 @@ Remaining / nice-to-have:
       `pyproject.toml`.
 - [ ] Publish (tag + build sdist/wheel) if distributing beyond source checkouts.
 
-## Correction v2 (planned — next session)
+## Correction v2 (IMPLEMENTED on branch `posterior-correction`)
 
-- [ ] Implement the **posterior-inversion correction + response-matrix unfolding** per the design
-      doc: [docs/plans/correction_v2_posterior_and_unfolding.md](docs/plans/correction_v2_posterior_and_unfolding.md).
-      Phase 0 (shared delta-basis runs, multiprocessing pool + `--task k/N` chunking) → Phase 1
-      (posterior correction with credible intervals; degeneracy shows up as widened/multimodal
-      posteriors) → Phase 2 (response-matrix unfolding of full f(p, β)). Local compute is fine
-      (M3 Max, ~10–30 min/population pooled); cluster notes in the doc.
+- [x] Posterior-inversion correction + response-matrix unfolding per
+      [docs/plans/correction_v2_posterior_and_unfolding.md](docs/plans/correction_v2_posterior_and_unfolding.md):
+      `pyleader-basis` (parallel/resumable/chunkable delta basis), posterior correction with
+      68/95% credible intervals + multimodality flag (`run_population --correction-method`),
+      and `pyleader-unfold` (full f(p, β) with 16–84% bands).
+- [ ] **CDF-space response refinement** — remove the measured mixture-linearity model error of the
+      W-space unfolding by building response columns from simulated amplitude CDFs (exactly
+      linear in mixtures). See the plan doc's "Follow-on refinement".
 
 ## Optional follow-on tooling (deferred)
 

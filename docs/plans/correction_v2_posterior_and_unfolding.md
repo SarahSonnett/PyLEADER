@@ -1,6 +1,13 @@
 # Correction v2: posterior inversion + response-matrix unfolding
 
-**Status:** planned, not implemented (written 2026-07-08; target: next work session).
+**Status:** IMPLEMENTED on branch `posterior-correction` (2026-07-08). Phase 0 =
+`pyleader/synthetic/basis.py` + `pyleader-basis`; Phase 1 = `pyleader/synthetic/posterior.py`
+(+ `run_population --correction-method`); Phase 2 = `pyleader/synthetic/unfold.py` +
+`pyleader-unfold`. Validation: posterior coverage 3/3 truths inside 95% intervals with correct
+multimodality flags; unfolding exact in-sample, but the **mixture test measured real model error**
+(the regularized inversion is not exactly linear in mixtures — recovered mass biased toward lower
+p). Identified refinement: build the response from amplitude **CDFs** (exactly linear in mixtures)
+instead of inverted W's — see "Open questions" below.
 **Prerequisite reading:** README "How it works" + "Per-population pipeline"; `pyleader/synthetic/`.
 
 ## Why (scientific motivation)
@@ -142,7 +149,16 @@ one array element per chunk, no inter-task communication, pip-installable packag
 - **Commercial cloud** — ~150 CPU-h ≈ **$5–15** at spot prices; cheap but setup overhead likely
   exceeds the benefit vs. running locally.
 
-## Open questions (decide at implementation)
+## Follow-on refinement (identified during Phase-2 validation)
+
+- [ ] **CDF-space response.** The W-space unfolding assumes the recovered solution of a mixture is
+      the mixture of recovered solutions; the NNLS regularization violates this mildly (measured:
+      mixture mass pulled toward lower p). The amplitude **CDF is exactly linear in mixtures**, so
+      building the response columns from each basis unit's simulated amplitude CDF — i.e. LEADER
+      with *simulated* basis functions replacing the analytic F_ij — removes the model error
+      entirely. Requires persisting per-run amplitude samples (basis + analysis trials).
+
+## Open questions (decided/remaining at implementation)
 
 1. Freeze `leader_invert` grid jitter for real analyses too, or rebin? (Check effect on results.)
 2. Match basis `Ndraws` to the *real* population's usable-amplitude count (noise realism) vs. fixed 1000?

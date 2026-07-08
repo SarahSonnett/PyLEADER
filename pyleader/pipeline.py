@@ -60,6 +60,20 @@ class PopulationConfig:
     scattering: str = "ls_lambert"
     correction_stat: str = "peak"
 
+    # which correction(s) to derive/apply:
+    #   "quadratic"  — the deterministic recovered->true surface (bias-map sweep)
+    #   "posterior"  — the probabilistic correction with credible intervals (delta basis)
+    #   "both"       — run both (default; the report shows them side by side)
+    correction_method: str = "both"
+    # delta-basis campaign for the posterior correction (auto-built/resumed if absent)
+    basis_dir: Optional[str] = None            # default: "<analysis outdir>_basis"
+    basis_np: int = 8                          # p grid points
+    basis_nb: int = 8                          # beta grid points
+    basis_p_range: tuple = (0.30, 0.80)
+    basis_b_range_deg: tuple = (6.0, 84.0)
+    basis_nseeds: int = 4
+    basis_nproc: Optional[int] = None          # default: cores - 2
+
     base_dir: str = None
     # Arbitrary .obs directory (bypasses the naming convention). Used for both
     # building (Step 2) and reading (Step 3), and the sweep geometry follows.
@@ -71,6 +85,10 @@ class PopulationConfig:
         if self.base_dir is None:
             from .config import DEFAULT_BASE_DIR
             self.base_dir = DEFAULT_BASE_DIR
+        if self.correction_method not in ("quadratic", "posterior", "both"):
+            raise ValueError(
+                f"correction_method must be 'quadratic', 'posterior' or 'both', "
+                f"got {self.correction_method!r}")
 
     def analysis_config(self) -> AnalysisConfig:
         return AnalysisConfig(
@@ -104,11 +122,13 @@ class PopulationConfig:
 class PopulationResult:
     pop_id: str
     outdir: str
-    recovered: tuple                # (p, beta_deg) LEADER peak, averaged over trials
-    corrected: tuple                # (p, beta_deg) after the population correction
-    correction_path: str
-    sweep_csv: str
-    r2: tuple                       # (r2_p, r2_beta) of the correction fit
+    recovered: tuple                       # (p, beta_deg) LEADER peak, averaged over trials
+    corrected: Optional[tuple] = None      # quadratic correction (p, beta_deg), if run
+    correction_path: Optional[str] = None
+    sweep_csv: Optional[str] = None
+    r2: Optional[tuple] = None             # (r2_p, r2_beta) of the quadratic fit
+    posterior: object = None               # synthetic.posterior.Posterior, if run
+    basis_dir: Optional[str] = None
 
 
 def _require_damit_models() -> None:
@@ -162,58 +182,111 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     outdir = run_analysis(acfg, seed=seed)
     rec_p, rec_b = _recovered_peak(outdir, acfg)
 
-    # 3. determine the bias map on THIS population's observing geometry
     geom = diameter_matched_files(acfg)
-    print(f"[{cfg.pop_id}] determining the bias map from {len(geom)} population geometries ...")
-    sweep_dir = os.path.join(outdir, "correction_sweep")
     base_syn = cfg.synthetic_base(geom)
-    sweep_csv = run_sweep(base_syn, cfg.p_peaks, cfg.b_peaks,
-                          nseeds=cfg.nseeds, seed=(seed or 0), outdir=sweep_dir)
+    result = PopulationResult(pop_id=cfg.pop_id, outdir=outdir, recovered=(rec_p, rec_b))
+    coeffs = None
 
-    # surface the recovered-vs-assigned summary figure at the top of the output dir
-    summary_src = os.path.join(sweep_dir, "sweep_summary.png")
-    if os.path.exists(summary_src):
-        shutil.copy(summary_src, os.path.join(outdir, "sweep_summary.png"))
+    # 3a–5a. quadratic correction: bias-map sweep -> fit -> apply
+    if cfg.correction_method in ("quadratic", "both"):
+        print(f"[{cfg.pop_id}] determining the bias map from {len(geom)} population geometries ...")
+        sweep_dir = os.path.join(outdir, "correction_sweep")
+        sweep_csv = run_sweep(base_syn, cfg.p_peaks, cfg.b_peaks,
+                              nseeds=cfg.nseeds, seed=(seed or 0), outdir=sweep_dir)
 
-    # 4. fit the population-specific correction
-    coeffs = fit_from_csv(sweep_csv, stat=cfg.correction_stat)
-    corr_path = os.path.join(outdir, "correction_function.json")
-    save_correction(coeffs, corr_path)
-    plot_correction_fit(sweep_csv, coeffs, os.path.join(outdir, "correction_fit.png"))
+        # surface the recovered-vs-assigned summary figure at the top of the output dir
+        summary_src = os.path.join(sweep_dir, "sweep_summary.png")
+        if os.path.exists(summary_src):
+            shutil.copy(summary_src, os.path.join(outdir, "sweep_summary.png"))
 
-    # 5. apply it to the population's recovered peak
-    cor_p, cor_b = apply_correction([rec_p], [rec_b], coeffs)
-    cor_p, cor_b = float(cor_p[0]), float(cor_b[0])
+        coeffs = fit_from_csv(sweep_csv, stat=cfg.correction_stat)
+        corr_path = os.path.join(outdir, "correction_function.json")
+        save_correction(coeffs, corr_path)
+        plot_correction_fit(sweep_csv, coeffs, os.path.join(outdir, "correction_fit.png"))
 
-    _write_report(cfg, outdir, (rec_p, rec_b), (cor_p, cor_b), coeffs)
+        cor_p, cor_b = apply_correction([rec_p], [rec_b], coeffs)
+        result.corrected = (float(cor_p[0]), float(cor_b[0]))
+        result.correction_path = corr_path
+        result.sweep_csv = sweep_csv
+        result.r2 = (coeffs["diagnostics"]["r2_p"], coeffs["diagnostics"]["r2_b"])
 
-    print(f"[{cfg.pop_id}] recovered (p={rec_p:.3f}, β={rec_b:.1f}°)  ->  "
-          f"corrected (p={cor_p:.3f}, β={cor_b:.1f}°)")
-    return PopulationResult(
-        pop_id=cfg.pop_id, outdir=outdir, recovered=(rec_p, rec_b), corrected=(cor_p, cor_b),
-        correction_path=corr_path, sweep_csv=sweep_csv,
-        r2=(coeffs["diagnostics"]["r2_p"], coeffs["diagnostics"]["r2_b"]),
-    )
+    # 3b–5b. posterior correction: delta basis -> forward table -> posterior
+    if cfg.correction_method in ("posterior", "both"):
+        from .synthetic.basis import run_basis
+        from .synthetic.posterior import build_forward_table, posterior_correct, plot_posterior
+
+        basis_dir = cfg.basis_dir or f"{outdir}_basis"
+        print(f"[{cfg.pop_id}] posterior correction: delta basis at {basis_dir}")
+        p_grid = np.linspace(cfg.basis_p_range[0], cfg.basis_p_range[1], cfg.basis_np)
+        b_grid = np.deg2rad(np.linspace(cfg.basis_b_range_deg[0],
+                                        cfg.basis_b_range_deg[1], cfg.basis_nb))
+        run_basis(base_syn, p_grid, b_grid, nseeds=cfg.basis_nseeds,
+                  seed=(seed or 0), outdir=basis_dir, nproc=cfg.basis_nproc)
+
+        table = build_forward_table(basis_dir)
+        post = posterior_correct(rec_p, rec_b, table)
+        post.save(os.path.join(outdir, "posterior.npz"))
+        plot_posterior(post, os.path.join(outdir, "posterior_correction.png"))
+        result.posterior = post
+        result.basis_dir = basis_dir
+
+    _write_report(cfg, outdir, (rec_p, rec_b), result.corrected, coeffs, result.posterior)
+
+    msg = f"[{cfg.pop_id}] recovered (p={rec_p:.3f}, β={rec_b:.1f}°)"
+    if result.corrected is not None:
+        msg += f"  ->  quadratic (p={result.corrected[0]:.3f}, β={result.corrected[1]:.1f}°)"
+    if result.posterior is not None:
+        po = result.posterior
+        msg += (f"  ->  posterior p={po.p_median:.3f} "
+                f"[{po.p_lo68:.3f},{po.p_hi68:.3f}], β={po.b_median:.1f}° "
+                f"[{po.b_lo68:.1f},{po.b_hi68:.1f}]"
+                + ("  [MULTIMODAL]" if po.multimodal else ""))
+    print(msg)
+    return result
 
 
-def _write_report(cfg, outdir, recovered, corrected, coeffs):
-    d = coeffs["diagnostics"]
-    pr, br = d["p_rec_range"], d["b_rec_range"]
-    p_extrap = not (pr[0] <= recovered[0] <= pr[1])
-    b_extrap = not (br[0] <= recovered[1] <= br[1])
+def _write_report(cfg, outdir, recovered, corrected=None, coeffs=None, posterior=None):
     with open(os.path.join(outdir, "population_report.txt"), "w") as f:
         f.write(f"# Population pipeline report: {cfg.pop_id} ({cfg.population_kind})\n")
         f.write(f"# catalog={cfg.cat} filter={cfg.filterpriority} "
                 f"diam=[{cfg.diam_low},{cfg.diam_high}] km  Ntrials={cfg.Ntrials} Ndraws={cfg.Ndraws}\n")
-        f.write(f"# correction: {cfg.correction_stat}-based, per-population geometry, "
-                f"n={d['n']}, terms={coeffs.get('n_terms')}, "
-                f"R2_p={d['r2_p']:.3f} R2_beta={d['r2_b']:.3f}\n")
-        f.write(f"# synthetic recovered ranges: p in [{pr[0]:.2f},{pr[1]:.2f}], "
-                f"beta in [{br[0]:.0f},{br[1]:.0f}] deg\n")
-        if p_extrap or b_extrap:
-            f.write("# WARNING: recovered %s outside the synthetic range -> correction "
-                    "EXTRAPOLATES; treat corrected value(s) with caution\n"
-                    % (", ".join([x for x, e in (("p", p_extrap), ("beta", b_extrap)) if e])))
-        f.write("\nquantity   recovered   corrected\n")
-        f.write("p          %9.4f   %9.4f\n" % (recovered[0], corrected[0]))
-        f.write("beta_deg   %9.2f   %9.2f\n" % (recovered[1], corrected[1]))
+
+        if coeffs is not None and corrected is not None:
+            d = coeffs["diagnostics"]
+            pr, br = d["p_rec_range"], d["b_rec_range"]
+            p_extrap = not (pr[0] <= recovered[0] <= pr[1])
+            b_extrap = not (br[0] <= recovered[1] <= br[1])
+            f.write(f"# quadratic correction: {cfg.correction_stat}-based, per-population "
+                    f"geometry, n={d['n']}, terms={coeffs.get('n_terms')}, "
+                    f"R2_p={d['r2_p']:.3f} R2_beta={d['r2_b']:.3f}\n")
+            f.write(f"# synthetic recovered ranges: p in [{pr[0]:.2f},{pr[1]:.2f}], "
+                    f"beta in [{br[0]:.0f},{br[1]:.0f}] deg\n")
+            if p_extrap or b_extrap:
+                f.write("# WARNING: recovered %s outside the synthetic range -> quadratic "
+                        "correction EXTRAPOLATES; treat corrected value(s) with caution\n"
+                        % (", ".join([x for x, e in (("p", p_extrap), ("beta", b_extrap)) if e])))
+            f.write("\n== quadratic correction ==\n")
+            f.write("quantity   recovered   corrected\n")
+            f.write("p          %9.4f   %9.4f\n" % (recovered[0], corrected[0]))
+            f.write("beta_deg   %9.2f   %9.2f\n" % (recovered[1], corrected[1]))
+
+        if posterior is not None:
+            po = posterior
+            f.write("\n== posterior correction (probabilistic; per-population delta basis) ==\n")
+            f.write("quantity   recovered      median  68% interval        95% interval        MAP\n")
+            f.write("p          %9.4f   %9.4f  [%6.4f, %6.4f]  [%6.4f, %6.4f]  %6.4f\n"
+                    % (recovered[0], po.p_median, po.p_lo68, po.p_hi68,
+                       po.p_lo95, po.p_hi95, po.p_map))
+            f.write("beta_deg   %9.2f   %9.2f  [%6.2f, %6.2f]  [%6.2f, %6.2f]  %6.2f\n"
+                    % (recovered[1], po.b_median, po.b_lo68, po.b_hi68,
+                       po.b_lo95, po.b_hi95, po.b_map))
+            if po.multimodal:
+                f.write(f"# WARNING: the posterior is MULTIMODAL ({po.n_modes} modes) — the "
+                        "p-beta degeneracy admits several true populations consistent with "
+                        "this recovery; see posterior_correction.png before quoting a single "
+                        "value.\n")
+            edge = (po.p_median <= po.p_grid[0] + 0.02 or po.p_median >= po.p_grid[-1] - 0.02
+                    or po.b_median <= po.b_grid[0] + 2 or po.b_median >= po.b_grid[-1] - 2)
+            if edge:
+                f.write("# NOTE: the posterior peaks near the edge of the basis grid — "
+                        "consider widening basis_p_range / basis_b_range_deg.\n")

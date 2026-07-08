@@ -68,6 +68,10 @@ class SyntheticConfig:
     convert2degrees: bool = True
     deltaP: float = 0.1
     deltaB: float = 1.0
+    # Randomly perturb the inversion's recovered (P, BETA) bin grids (the
+    # original LEADER behaviour). Basis runs disable this so every run shares
+    # one canonical grid (required to stack them into a forward model).
+    grid_jitter: bool = True
 
     # --- data paths ---
     damit_list: str = _DAMIT_LIST
@@ -76,6 +80,10 @@ class SyntheticConfig:
     # Explicit list of .obs geometry files; when set it overrides geometry_dir
     # (used by the per-population pipeline to match the analyzed objects).
     geometry_files: Optional[list] = None
+    # Optional callable returning one (p_target, beta_rad) draw per object —
+    # lets validation runs assign an arbitrary (mixture/broad) true population
+    # instead of the single-peak rules. Overrides p_peak/b_peak sampling.
+    truth_sampler: Optional[object] = None
     base_dir: str = DEFAULT_BASE_DIR
     outdir: Optional[str] = None             # defaults via `resolved_outdir`
 
@@ -84,6 +92,24 @@ class SyntheticConfig:
             raise ValueError(
                 f"scattering must be 'ls_lambert' or 'hapke', got {self.scattering!r}"
             )
+
+    @classmethod
+    def delta_preset(cls, p_peak: float, b_peak: float, **kwargs) -> "SyntheticConfig":
+        """A near-delta synthetic population at one assigned ``(p, beta)``.
+
+        Used for the correction basis runs: essentially all objects sit at the
+        assigned peak (no uniform-beta background, tight tolerances), and the
+        inversion grid jitter is disabled so all runs share the canonical
+        recovered grid. ``b_peak`` is in radians (as at the API level).
+        """
+        defaults = dict(
+            p_peak=p_peak, b_peak=b_peak,
+            p_accept_tol=0.02, p_escape_chance=0.0,
+            beta_peak_chance=1.0, beta_jitter=0.01,
+            grid_jitter=False,
+        )
+        defaults.update(kwargs)
+        return cls(**defaults)
 
     @property
     def resolved_outdir(self) -> str:

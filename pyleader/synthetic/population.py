@@ -46,6 +46,7 @@ class SyntheticResult:
             p_peak=self.p_peak, b_peak=self.b_peak,
             p_true=self.p_true, beta_true=self.beta_true,
             P=self.P, BETA=self.BETA, Pmargin=self.Pmargin, Bmargin=self.Bmargin,
+            W=self.inversion.W,  # full joint occupation numbers (for posterior/unfolding)
         )
 
     @staticmethod
@@ -79,8 +80,14 @@ def _geometry_files(cfg: SyntheticConfig):
     return files
 
 
-def _draw_shape(model_files, cfg: SyntheticConfig):
-    """Pick and stretch a DAMIT model until its elongation matches ``p_peak``."""
+def _draw_shape(model_files, cfg: SyntheticConfig, p_target=None):
+    """Pick and stretch a DAMIT model until its elongation matches the target.
+
+    ``p_target`` defaults to ``cfg.p_peak``; a ``truth_sampler`` passes its own
+    per-object target instead.
+    """
+    if p_target is None:
+        p_target = cfg.p_peak
     while True:
         fname = random.choice(model_files)
         x, y, z, F = read_damit_model(fname)
@@ -89,7 +96,7 @@ def _draw_shape(model_files, cfg: SyntheticConfig):
         stretch = np.maximum(1.0, 2.0 * np.abs(np.random.randn(3)))
         R = R * stretch
         props = ellipsoid_properties(R, F)
-        if abs(props.p - cfg.p_peak) <= cfg.p_accept_tol:
+        if abs(props.p - p_target) <= cfg.p_accept_tol:
             return props
         # small chance to accept an off-target (but still elongated) shape
         if np.random.rand() > (1 - cfg.p_escape_chance) and props.p > cfg.p_escape_min:
@@ -133,8 +140,12 @@ def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool =
         if verbose and (k + 1) % 50 == 0:
             print(f"\r  synthetic objects: {k + 1}/{cfg.Ndraws}", end="", flush=True)
 
-        props = _draw_shape(model_files, cfg)
-        beta = _draw_beta(cfg)
+        if cfg.truth_sampler is not None:
+            p_t, beta = cfg.truth_sampler()
+            props = _draw_shape(model_files, cfg, p_target=p_t)
+        else:
+            props = _draw_shape(model_files, cfg)
+            beta = _draw_beta(cfg)
 
         dates, e_sun, e_earth, ang = read_synth_geometry(
             random.choice(geom_files), cfg.phase_angle_limit
@@ -154,7 +165,8 @@ def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool =
 
     if verbose:
         print()  # end the object-count line
-    result = leader_invert(Asort, CDFA, deltaP=cfg.deltaP, deltaB=cfg.deltaB, verbose=verbose)
+    result = leader_invert(Asort, CDFA, deltaP=cfg.deltaP, deltaB=cfg.deltaB,
+                           grid_jitter=cfg.grid_jitter, verbose=verbose)
 
     Pmargin = np.sum(result.W, axis=1)
     Bmargin = np.sum(result.W, axis=0)

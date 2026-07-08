@@ -30,6 +30,8 @@ pyleader-build-obs       = "pyleader.cli.build_obs_files:main"
 pyleader-spot-check      = "pyleader.cli.spot_check:main"
 pyleader-compare         = "pyleader.cli.compare_populations:main"
 pyleader-bias-map        = "pyleader.cli.bias_map:main"
+pyleader-basis           = "pyleader.cli.basis_runs:main"
+pyleader-unfold          = "pyleader.cli.unfold_analysis:main"
 pyleader-plot-bias-map   = "pyleader.cli.plot_bias_map:main"
 pyleader-fit-correction  = "pyleader.cli.fit_correction:main"
 

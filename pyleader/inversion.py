@@ -40,9 +40,15 @@ def leader_invert(
     gridtype: str | None = None,
     deltaP: float = 0.1,
     deltaB: float = 1.0,
+    grid_jitter: bool = True,
     verbose: bool = True,
 ) -> InversionResult:
-    """Solve ``M w = CDF(A)`` for the occupation numbers ``w`` over the (p, beta) grid."""
+    """Solve ``M w = CDF(A)`` for the occupation numbers ``w`` over the (p, beta) grid.
+
+    ``grid_jitter=False`` keeps the canonical un-perturbed (P, BETA) bin grids
+    (used by the correction basis runs so all runs share one grid); the default
+    reproduces the original LEADER behaviour of randomly perturbing the bins.
+    """
     NP = 20
     NBETA = 29
 
@@ -65,7 +71,8 @@ def leader_invert(
                 noise[i] = coeff * np.random.randn()
         return noise
 
-    P = P + truncated_gaussian_noise(P)
+    if grid_jitter:
+        P = P + truncated_gaussian_noise(P)
 
     if gridtype == "dynamic":
         temp = np.zeros(5)
@@ -77,7 +84,8 @@ def leader_invert(
         temp = np.concatenate([temp, BETA[14:]])
         BETA = temp
 
-    BETA = np.minimum(BETA + truncated_gaussian_noise(BETA), np.pi / 2 - np.finfo(float).eps)
+    if grid_jitter:
+        BETA = np.minimum(BETA + truncated_gaussian_noise(BETA), np.pi / 2 - np.finfo(float).eps)
 
     # Build matrix M for the linear system M w = C
     M = np.zeros((len(Asort), len(P) * len(BETA)))

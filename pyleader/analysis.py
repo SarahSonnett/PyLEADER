@@ -163,6 +163,10 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
 
         result = leader_invert(Asort, CDFA, verbose=False)
 
+        # persist the joint solution (radians, pre-conversion) for unfolding
+        np.savez(f"{trialdir}/W_trial{trial + 1}.npz",
+                 W=result.W, P=result.P, BETA=result.BETA)
+
         Nobjs = len(set(Objects_drawn))
 
         # NOTE: betamax is written in radians*(180/pi) BEFORE the (optional)
