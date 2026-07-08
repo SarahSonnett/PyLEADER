@@ -162,13 +162,13 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     outdir = run_analysis(acfg, seed=seed)
     rec_p, rec_b = _recovered_peak(outdir, acfg)
 
-    # 3. synthetic sweep on THIS population's observing geometry
+    # 3. determine the bias map on THIS population's observing geometry
     geom = diameter_matched_files(acfg)
-    print(f"[{cfg.pop_id}] correction sweep on {len(geom)} population geometries ...")
+    print(f"[{cfg.pop_id}] determining the bias map from {len(geom)} population geometries ...")
     sweep_dir = os.path.join(outdir, "correction_sweep")
     base_syn = cfg.synthetic_base(geom)
     sweep_csv = run_sweep(base_syn, cfg.p_peaks, cfg.b_peaks,
-                          nseeds=cfg.nseeds, seed=(seed or 0), outdir=sweep_dir, verbose=False)
+                          nseeds=cfg.nseeds, seed=(seed or 0), outdir=sweep_dir)
 
     # surface the recovered-vs-assigned summary figure at the top of the output dir
     summary_src = os.path.join(sweep_dir, "sweep_summary.png")

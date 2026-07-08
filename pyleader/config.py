@@ -9,6 +9,7 @@ in ``scripts/`` expose every field as a command-line argument.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -17,6 +18,47 @@ from typing import Optional
 # catalog files (``neowise_mainbelt.csv``, ``AllMBAFamilyMembers.txt``) and all
 # ``Fam*_data_*`` / ``*_analysis_*`` directories live here.
 DEFAULT_BASE_DIR = "/Users/ssonnett/Desktop/work/MBA_SFDs"
+
+# Package data dir: ships the population membership files (gzipped), so a fresh
+# checkout works without the author's working directory. A same-named file in
+# base_dir takes precedence over the shipped copy.
+PKG_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+
+
+def resolve_data_file(name: str, base_dir: str) -> str:
+    """Resolve a membership/catalog filename to a usable path.
+
+    Order: absolute path as-is; else ``base_dir/<name>`` if it exists; else the
+    gzipped copy shipped with the package (numpy reads ``.gz`` transparently).
+    Falls back to the ``base_dir`` path (so the error message names it) when
+    nothing exists.
+    """
+    if name.startswith("/"):
+        return name
+    local = os.path.join(base_dir, name)
+    if os.path.exists(local):
+        return local
+    shipped = os.path.join(PKG_DATA_DIR, name + ".gz")
+    if os.path.exists(shipped):
+        return shipped
+    return local
+
+
+def require_neowise(path: str) -> str:
+    """Check the NEOWISE diameters table exists; fail early with instructions.
+
+    The table (~27 MB) is not shipped with the package: download
+    ``neowise_mainbelt.csv`` from the NEOWISE Diameters and Albedos V2.0 bundle
+    (Mainzer et al. 2019) and place it in ``--base-dir``.
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"NEOWISE diameters table not found: {path}\n"
+            "Download 'neowise_mainbelt.csv' from the NEOWISE Diameters and "
+            "Albedos V2.0 bundle (Mainzer et al. 2019, doi:10.26033/18S3-2Z54, "
+            "NASA PDS Small Bodies Node) and place it in your --base-dir."
+        )
+    return path
 
 
 @dataclass
@@ -181,9 +223,8 @@ class ObsBuildConfig:
 
     @property
     def family_path(self) -> str:
-        if self.family_file.startswith("/"):
-            return self.family_file
-        return f"{self.base_dir}/{self.family_file}"
+        """Family membership list: base_dir copy, else the shipped package copy."""
+        return resolve_data_file(self.family_file, self.base_dir)
 
     @property
     def neowise_path(self) -> str:

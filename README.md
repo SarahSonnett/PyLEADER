@@ -153,15 +153,19 @@ pyleader-build-obs --famid BG_IB_Ctypes --population background
 - **What it does:** 
 resolves the population to its member objects, queries NEOWISE @ IPAC for clean
 photometry, and writes one `.obs` file per object (photometry + Sun/observer geometry per point).
-- **Input:** (membership and catalog files under `--base-dir`)
+- **Input:**
   - `AllMBAFamilyMembers.txt` (families) — the collisional-family membership list from the
     [Asteroid Families Portal](http://asteroids.matf.bg.ac.rs/fam/) (Radović et al. 2017;
     downloaded July 2025), concatenated with the newly identified family members of
-    Nesvorný et al. (2024); see [References](#references)
+    Nesvorný et al. (2024); see [References](#references). **Ships with the package**
+    (gzipped, in `pyleader/data/`); a same-named copy in `--base-dir` takes precedence.
   - or `BGobjs_<REGION>_<TYPE>type_neowise.txt` (backgrounds) — background (non-family) object
-    selections, already cross-matched with NEOWISE
+    selections, already cross-matched with NEOWISE. **Ships with the package** likewise; see
+    [Membership data: provenance & regeneration](#membership-data-provenance--regeneration).
   - plus `neowise_mainbelt.csv` — object diameters from the NEOWISE mission data release
-    (Mainzer et al. 2019, [doi:10.26033/18S3-2Z54](https://doi.org/10.26033/18S3-2Z54))
+    (Mainzer et al. 2019, [doi:10.26033/18S3-2Z54](https://doi.org/10.26033/18S3-2Z54)).
+    **Not shipped** (~27 MB): download it from the PDS bundle at that DOI and place it in
+    `--base-dir` (the code stops with these instructions if it is missing).
 - **Arguments:**
   - `--famid ID` the integer Nesvorný family ID (e.g. `1128`), or a `BG_<REGION>_<TYPE>types` id for a background population (e.g. `BG_IB_Ctypes`) *(required)*
   - `--population {family,background}` type of population *(default* `family`*; set* `background` *for* `BG_*` *ids)*
@@ -372,6 +376,45 @@ measurement — `jd  sun_x sun_y sun_z  obs_x obs_y obs_z  wavelength flux fluxe
 
 
 
+### Membership data: provenance & regeneration
+
+The population membership files **ship with the package** (gzipped under `pyleader/data/`; numpy
+reads them directly). A same-named uncompressed copy in `--base-dir` always takes precedence, so
+you can substitute updated versions without touching the package. To regenerate them from the
+original sources:
+
+**`AllMBAFamilyMembers.txt`** — three whitespace-delimited columns:
+`family_id  packed_MPC_designation  object_number/designation`.
+
+1. Download the complete family-member list from the
+   [Asteroid Families Portal](http://asteroids.matf.bg.ac.rs/fam/) (Radović et al. 2017) —
+   the shipped copy was downloaded July 2025 (portal list last updated April 2023).
+2. Append the member lists of the 136 newly identified families of Nesvorný et al. (2024),
+   converted to the same three-column format.
+
+**`BGobjs_<REGION>_<TYPE>type_neowise.txt`** — five columns:
+`object_number  provisional_designation  packed_MPC_name  diameter_km  diameter_uncertainty_km`
+(the matching NEOWISE catalog row). The eight shipped files cover four main-belt regions × two
+taxonomic complexes. Regeneration recipe:
+
+1. Start from a proper-elements catalog (the shipped selections used the Nesvorný et al. 2024
+   catalog of proper orbits).
+2. Split by proper semimajor axis into regions bounded by the Kirkwood gaps:
+   **IB** (inner) 2.060–2.502 au, **MB** (middle) 2.502–2.825 au, **PB** (pristine)
+   2.825–2.955 au, **OB** (outer) 2.955–3.279 au.
+3. Remove every object that appears in the family membership list above — the remainder is the
+   *background* population of each region.
+4. Cross-match each region's background list with the NEOWISE diameters table
+   (Mainzer et al. 2019), keeping the columns listed above.
+5. Split each region into **C**- and **S**-complex subsets using literature taxonomic
+   classifications (the shipped files used a compilation with per-object source tags, e.g. the
+   DES *griz*-based classifications of Carruba et al. 2024).
+
+**`neowise_mainbelt.csv`** is deliberately **not** shipped (~27 MB): download it from the NEOWISE
+Diameters and Albedos V2.0 bundle (Mainzer et al. 2019,
+[doi:10.26033/18S3-2Z54](https://doi.org/10.26033/18S3-2Z54)) at the NASA PDS Small Bodies Node
+and place it in `--base-dir`. Steps 2–3 stop early with these instructions if it is missing.
+
 ### As a library
 
 ```python
@@ -488,5 +531,10 @@ family membership list (`AllMBAFamilyMembers.txt`).
 - Nesvorný, D., Roig, F., Vokrouhlický, D., & Brož, M. 2024, *Catalog of Proper Orbits for
 1.25 Million Main-belt Asteroids and Discovery of 136 New Collisional Families*, Astrophysical
 Journal Supplement Series, 274, 25. [doi:10.3847/1538-4365/ad675c](https://doi.org/10.3847/1538-4365/ad675c)
-— source of the newly identified family members concatenated into the membership list.
+— source of the newly identified family members concatenated into the membership list, and of the
+proper elements used for the background-region selections.
+- Carruba, V., et al. 2024, *Main belt asteroids taxonomical information from dark energy survey
+data*, [Monthly Notices of the Royal Astronomical Society, 527, 6495](https://academic.oup.com/mnras/article/527/3/6495/7395022)
+— among the taxonomic classifications used to split the background selections into C- and
+S-complexes.
 

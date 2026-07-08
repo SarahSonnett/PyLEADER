@@ -26,30 +26,34 @@ COLUMNS = (["trial", "seed", "p_peak", "b_peak_rad", "b_peak_deg",
 
 
 def run_sweep(base_cfg: SyntheticConfig, p_peaks, b_peaks, *,
-              nseeds: int = 1, seed: int = 0, outdir: str, verbose: bool = True) -> str:
+              nseeds: int = 1, seed: int = 0, outdir: str) -> str:
     """Run the grid × seeds sweep; write ``sweep_stats.csv`` + ``sweep_summary.png``.
 
     ``base_cfg`` supplies everything except ``p_peak``/``b_peak``/``outdir`` (which
     vary per run) — including the geometry source (``geometry_dir`` or
     ``geometry_files``), ``Ndraws``, scattering, and the matched tolerances.
+    The terminal shows a single self-updating progress bar over all runs.
     Returns the path to ``sweep_stats.csv``.
     """
     os.makedirs(outdir, exist_ok=True)
     grid = list(itertools.product(p_peaks, b_peaks))
-    if verbose:
-        print(f"Sweep: {len(grid)} grid points x {nseeds} seed(s) = {len(grid) * nseeds} runs")
+    total = len(grid) * nseeds
+    print(f"Determining the bias map: {len(grid)} grid points x {nseeds} seed(s) = {total} runs")
 
     rows = []
     run_idx = 0
     for i, (p_peak, b_peak) in enumerate(grid):
         # directory names carry beta in degrees (more intuitive for users)
         base = os.path.join(outdir, f"trial{i:03d}_p{p_peak:.2f}_b{np.rad2deg(b_peak):.0f}deg")
-        if verbose:
-            print(f"\n=== trial {i}: p_peak={p_peak}, b_peak={np.rad2deg(b_peak):.1f} deg")
         for s in range(nseeds):
             subdir = base if nseeds == 1 else os.path.join(base, f"seed{s}")
             cfg = replace(base_cfg, p_peak=p_peak, b_peak=b_peak, outdir=subdir)
-            res = run_synthetic(cfg, seed=seed + run_idx, make_plots=(s == 0))
+            # self-overwriting progress bar; individual runs are silenced
+            print(f"\rBias map: run {run_idx + 1}/{total} "
+                  f"({100.0 * (run_idx + 1) / total:4.0f}%)  "
+                  f"[p_peak={p_peak:.2f}, b_peak={np.rad2deg(b_peak):.0f} deg, seed {s}]   ",
+                  end="", flush=True)
+            res = run_synthetic(cfg, seed=seed + run_idx, make_plots=(s == 0), verbose=False)
             run_idx += 1
 
             row = {
@@ -62,6 +66,7 @@ def run_sweep(base_cfg: SyntheticConfig, p_peaks, b_peaks, *,
             row.update(stats_row(res.stats))
             rows.append(row)
 
+    print()  # end the progress-bar line
     csv_path = os.path.join(outdir, "sweep_stats.csv")
     with open(csv_path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS)

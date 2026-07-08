@@ -20,7 +20,7 @@ import os
 
 import numpy as np
 
-from .config import ObsBuildConfig
+from .config import ObsBuildConfig, require_neowise, resolve_data_file
 
 
 def is_background(pop_id: str) -> bool:
@@ -31,7 +31,8 @@ def is_background(pop_id: str) -> bool:
 def background_neowise_path(cfg: ObsBuildConfig) -> str:
     """Map a background ID to its ``BGobjs_<REGION>_<TYPE>type_neowise.txt`` file.
 
-    ``BG_IB_Ctypes`` -> ``<base_dir>/BGobjs_IB_Ctype_neowise.txt``.
+    ``BG_IB_Ctypes`` -> ``BGobjs_IB_Ctype_neowise.txt``, resolved from
+    ``base_dir`` if present there, else from the copy shipped with the package.
     """
     parts = cfg.famid.split("_")           # ["BG", "IB", "Ctypes"]
     if len(parts) < 3:
@@ -40,7 +41,7 @@ def background_neowise_path(cfg: ObsBuildConfig) -> str:
         )
     region = parts[1]
     typ = parts[2].rstrip("s")             # "Ctypes" -> "Ctype"
-    return f"{cfg.base_dir}/BGobjs_{region}_{typ}_neowise.txt"
+    return resolve_data_file(f"BGobjs_{region}_{typ}_neowise.txt", cfg.base_dir)
 
 
 def _resolve_background(cfg: ObsBuildConfig):
@@ -76,6 +77,7 @@ def _resolve_family(cfg: ObsBuildConfig):
     objid_mpec = mpecobj_all.compress((famid_all == cfg.famid).flat)
     print("Number of asteroids in this family = " + str(len(objid_mpec)))
 
+    require_neowise(cfg.neowise_path)
     objnum_n, provdesig_n, name_mpced_n, diam_n, diamerr_n = np.genfromtxt(
         cfg.neowise_path, unpack=True, usecols=(0, 1, 2, 11, 12), delimiter=",", dtype=str
     )

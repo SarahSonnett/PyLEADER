@@ -56,8 +56,8 @@ def main(argv=None) -> int:
     b_peaks_rad = [math.radians(b) for b in args.b_peaks]
     csv_path = run_sweep(base_cfg, args.p_peaks, b_peaks_rad,
                          nseeds=args.nseeds, seed=args.seed, outdir=args.outdir)
-    print(f"\nSweep complete.\n  per-trial stats: {csv_path}"
-          f"\n  summary plot:    {os.path.join(args.outdir, 'sweep_summary.png')}")
+    print(f"\nBias map complete.\n  per-run stats:  {csv_path}"
+          f"\n  summary plot:   {os.path.join(args.outdir, 'sweep_summary.png')}")
     return 0
 
 

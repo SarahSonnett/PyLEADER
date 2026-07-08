@@ -39,3 +39,5 @@ include = ["pyleader*"]
 [tool.setuptools.package-data]
 # Ship the canonical bias correction (json) and the DAMIT model listing (txt).
 "pyleader.synthetic" = ["data/*.json", "data/*.txt"]
+# Ship the population membership files (gzipped): family list + background selections.
+"pyleader" = ["data/*.gz"]

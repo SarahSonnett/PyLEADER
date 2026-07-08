@@ -15,7 +15,7 @@ import shutil
 
 import numpy as np
 
-from .config import AnalysisConfig
+from .config import AnalysisConfig, require_neowise
 from .inversion import leader_invert
 from .lightcurve import lcg_read_WISE
 from .naming import convert_to_mpecname
@@ -25,6 +25,7 @@ from .postprocess import leader_postprocess_WISE
 
 def _load_neowise_diameters(cfg: AnalysisConfig):
     """Return ``(name_mpced_n, diam_n)`` from the NEOWISE catalog."""
+    require_neowise(cfg.neowise_path)
     name_mpced_n_full = np.genfromtxt(cfg.neowise_path, unpack=True, usecols=(2), delimiter=",", dtype=str)
     name_mpced_n = np.asarray(
         [name_mpced_n_full[i][1:-1].replace(" ", "") for i in range(len(name_mpced_n_full))]

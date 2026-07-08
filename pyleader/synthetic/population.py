@@ -107,11 +107,13 @@ def _draw_beta(cfg: SyntheticConfig) -> float:
 
 
 def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool = False,
-                  make_plots: bool = True) -> SyntheticResult:
+                  make_plots: bool = True, verbose: bool = True) -> SyntheticResult:
     """Run one synthetic validation experiment; returns a :class:`SyntheticResult`.
 
     ``make_plots=False`` skips the per-run figures (the stats file and ``.npz``
-    are still written) — useful when sweeping many seeds.
+    are still written) and ``verbose=False`` silences the per-run terminal
+    output — both are used by the bias-map sweep, which shows a single
+    progress bar instead.
     """
     if seed is not None:
         random.seed(seed)
@@ -128,8 +130,8 @@ def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool =
 
     A_tot, p_true, beta_true = [], [], []
     for k in range(cfg.Ndraws):
-        if (k + 1) % 50 == 0:
-            print(f"  {k + 1}/{cfg.Ndraws}")
+        if verbose and (k + 1) % 50 == 0:
+            print(f"\r  synthetic objects: {k + 1}/{cfg.Ndraws}", end="", flush=True)
 
         props = _draw_shape(model_files, cfg)
         beta = _draw_beta(cfg)
@@ -150,7 +152,9 @@ def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool =
     Asort = np.sort(A_tot)
     CDFA = np.linspace(1 / len(Asort), 1, len(Asort))
 
-    result = leader_invert(Asort, CDFA, deltaP=cfg.deltaP, deltaB=cfg.deltaB)
+    if verbose:
+        print()  # end the object-count line
+    result = leader_invert(Asort, CDFA, deltaP=cfg.deltaP, deltaB=cfg.deltaB, verbose=verbose)
 
     Pmargin = np.sum(result.W, axis=1)
     Bmargin = np.sum(result.W, axis=0)
@@ -182,7 +186,8 @@ def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool =
     # Console summary of recovered vs assigned peaks
     p_rec = result.P[np.argmax(Pmargin)]
     b_rec = np.rad2deg(result.BETA[np.argmax(Bmargin)])
-    print(f"Assigned  peak: p={cfg.p_peak:.3f}, beta={np.rad2deg(cfg.b_peak):.1f} deg")
-    print(f"Recovered peak: p={p_rec:.3f}, beta={b_rec:.1f} deg")
-    print(f"Output: {outdir}")
+    if verbose:
+        print(f"Assigned  peak: p={cfg.p_peak:.3f}, beta={np.rad2deg(cfg.b_peak):.1f} deg")
+        print(f"Recovered peak: p={p_rec:.3f}, beta={b_rec:.1f} deg")
+        print(f"Output: {outdir}")
     return res
