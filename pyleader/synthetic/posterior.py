@@ -31,40 +31,86 @@ _FLOOR_P = (0.05 / 2.0) ** 2
 _FLOOR_B = (3.1 / 2.0) ** 2  # deg^2
 
 
+def _recovered_stat(P, BETA, Pmargin, Bmargin, stat: str):
+    """One summary of a recovered solution: the marginal peak or weighted median.
+
+    Returns ``(p, beta_deg)``. Used identically for basis units and for the real
+    analysis, so the observed statistic always matches the forward table's.
+    """
+    if stat == "peak":
+        return (float(P[int(np.argmax(Pmargin))]),
+                float(np.rad2deg(BETA[int(np.argmax(Bmargin))])))
+    if stat == "median":
+        from .stats import distribution_stats
+        return (float(distribution_stats(P, Pmargin)["median"]),
+                float(distribution_stats(np.rad2deg(BETA), Bmargin)["median"]))
+    raise ValueError(f"stat must be 'peak' or 'median', got {stat!r}")
+
+
+def recovered_stat_from_analysis(analysis_outdir: str, stat: str = "peak"):
+    """The real analysis's recovered ``(p, beta_deg)`` statistic, averaged over trials.
+
+    Computed from the per-trial joint solutions (``Trial*/W_trial*.npz``) with the
+    same extractor the forward table uses, so both sides of the posterior are
+    measured identically.
+    """
+    import glob as _glob
+    paths = sorted(_glob.glob(os.path.join(analysis_outdir, "Trial*", "W_trial*.npz")))
+    if not paths:
+        raise FileNotFoundError(
+            f"No Trial*/W_trial*.npz under {analysis_outdir} — re-run the analysis with "
+            "this version of PyLEADER (it saves each trial's joint solution).")
+    vals = []
+    for p in paths:
+        d = np.load(p)
+        W = np.asarray(d["W"], float)
+        vals.append(_recovered_stat(d["P"], d["BETA"], W.sum(axis=1), W.sum(axis=0), stat))
+    v = np.asarray(vals)
+    return float(v[:, 0].mean()), float(v[:, 1].mean())
+
+
 @dataclass
 class ForwardTable:
-    """Mean/covariance of the recovered peak at each assigned grid point."""
+    """Mean/covariance of a recovered statistic at each assigned grid point."""
 
     p_grid: np.ndarray          # (Np,) assigned p peaks
     b_grid: np.ndarray          # (Nb,) assigned beta peaks, DEGREES
     mean: np.ndarray            # (Np, Nb, 2): recovered [p, beta_deg] mean over seeds
     cov: np.ndarray             # (Np, Nb, 2, 2): seed covariance + floor
     nseeds: np.ndarray          # (Np, Nb): seeds contributing per grid point
+    stat: str = "peak"          # which recovered statistic this table describes
 
     def save(self, path: str) -> None:
         np.savez(path, p_grid=self.p_grid, b_grid=self.b_grid,
-                 mean=self.mean, cov=self.cov, nseeds=self.nseeds)
+                 mean=self.mean, cov=self.cov, nseeds=self.nseeds, stat=self.stat)
 
     @classmethod
     def load(cls, path: str) -> "ForwardTable":
         d = np.load(path)
-        return cls(d["p_grid"], d["b_grid"], d["mean"], d["cov"], d["nseeds"])
+        stat = str(d["stat"]) if "stat" in d.files else "peak"
+        return cls(d["p_grid"], d["b_grid"], d["mean"], d["cov"], d["nseeds"], stat)
 
 
-def build_forward_table(basis_dir: str, *, cache: bool = True) -> ForwardTable:
-    """Assemble (and cache) the forward table from a completed basis directory."""
-    cache_path = os.path.join(basis_dir, "forward_table.npz")
+def build_forward_table(basis_dir: str, *, stat: str = "peak",
+                        cache: bool = True) -> ForwardTable:
+    """Assemble (and cache) the forward table from a completed basis directory.
+
+    ``stat`` selects the recovered summary used as the measurement channel:
+    ``"peak"`` (marginal argmax; historic behaviour) or ``"median"`` (weighted
+    median of the marginals — continuous, so less bin-quantized). Both channels
+    can be built from the same basis; no new simulations are needed.
+    """
+    cache_path = os.path.join(basis_dir, f"forward_table_{stat}.npz")
     if cache and os.path.exists(cache_path):
         return ForwardTable.load(cache_path)
 
-    # collect recovered peaks per (assigned p, assigned b)
+    # collect the recovered statistic per (assigned p, assigned b)
     samples: dict = {}
     for p_peak, b_peak, _s, path in basis_units(basis_dir):
         d = np.load(path)
-        p_rec = float(d["P"][int(np.argmax(d["Pmargin"]))])
-        b_rec = float(np.rad2deg(d["BETA"][int(np.argmax(d["Bmargin"]))]))
+        rec = _recovered_stat(d["P"], d["BETA"], d["Pmargin"], d["Bmargin"], stat)
         key = (round(p_peak, 6), round(np.rad2deg(b_peak), 6))
-        samples.setdefault(key, []).append((p_rec, b_rec))
+        samples.setdefault(key, []).append(rec)
     if not samples:
         raise FileNotFoundError(f"No completed basis units found in {basis_dir}")
 
@@ -85,7 +131,7 @@ def build_forward_table(basis_dir: str, *, cache: bool = True) -> ForwardTable:
         cov[ip, ib] = np.atleast_2d(c) + floor
         nseeds[ip, ib] = len(v)
 
-    table = ForwardTable(p_grid, b_grid, mean, cov, nseeds)
+    table = ForwardTable(p_grid, b_grid, mean, cov, nseeds, stat)
     if cache:
         table.save(cache_path)
     return table

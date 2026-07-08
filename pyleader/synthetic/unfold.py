@@ -95,10 +95,22 @@ class UnfoldResult:
     f_hi: np.ndarray          # 84th percentile
     alpha: float              # chosen regularization strength
     relerr: float             # ||R f - d|| / ||d|| at the mean solution
+    # population medians of the unfolded distribution, with 16-84% bands from
+    # the perturbation ensemble ("what is the median object's true p / beta?")
+    pop_median_p: float = float("nan")
+    pop_median_p_lo: float = float("nan")
+    pop_median_p_hi: float = float("nan")
+    pop_median_b: float = float("nan")
+    pop_median_b_lo: float = float("nan")
+    pop_median_b_hi: float = float("nan")
 
     def save(self, path: str) -> None:
         np.savez(path, p_grid=self.p_grid, b_grid=self.b_grid, f_mean=self.f_mean,
-                 f_lo=self.f_lo, f_hi=self.f_hi, alpha=self.alpha, relerr=self.relerr)
+                 f_lo=self.f_lo, f_hi=self.f_hi, alpha=self.alpha, relerr=self.relerr,
+                 pop_median_p=np.array([self.pop_median_p, self.pop_median_p_lo,
+                                        self.pop_median_p_hi]),
+                 pop_median_b=np.array([self.pop_median_b, self.pop_median_b_lo,
+                                        self.pop_median_b_hi]))
 
 
 def _smoothness_operator(np_, nb):
@@ -179,7 +191,23 @@ def unfold(W_obs: np.ndarray, resp: Response, *, alphas=None,
     f_hi = norm_shape(np.percentile(ens, 84, axis=0))
     relerr = float(np.linalg.norm(resp.R @ f_best - d) / np.linalg.norm(d))
 
-    return UnfoldResult(resp.p_grid, resp.b_grid, f_mean, f_lo, f_hi, alpha, relerr)
+    # population medians ("the median object's true p / beta") with ensemble bands
+    from .stats import distribution_stats
+
+    def _medians(vec):
+        f = norm_shape(vec)
+        return (distribution_stats(resp.p_grid, f.sum(axis=1))["median"],
+                distribution_stats(resp.b_grid, f.sum(axis=0))["median"])
+
+    med_p, med_b = _medians(f_best)
+    ens_med = np.asarray([_medians(e) for e in ens])
+    lo_p, hi_p = np.percentile(ens_med[:, 0], [16, 84])
+    lo_b, hi_b = np.percentile(ens_med[:, 1], [16, 84])
+
+    return UnfoldResult(resp.p_grid, resp.b_grid, f_mean, f_lo, f_hi, alpha, relerr,
+                        pop_median_p=float(med_p), pop_median_p_lo=float(lo_p),
+                        pop_median_p_hi=float(hi_p), pop_median_b=float(med_b),
+                        pop_median_b_lo=float(lo_b), pop_median_b_hi=float(hi_b))
 
 
 def observed_from_analysis(analysis_outdir: str) -> np.ndarray:

@@ -65,6 +65,11 @@ class PopulationConfig:
     #   "posterior"  — the probabilistic correction with credible intervals (delta basis)
     #   "both"       — run both (default; the report shows them side by side)
     correction_method: str = "both"
+    # which recovered statistic the posterior inverts: "peak" (marginal argmax),
+    # "median" (weighted median of the marginals; continuous, less bin-quantized),
+    # or "both" (default) — running both doubles as a consistency check: for a
+    # genuinely single-peaked population the two channels must agree.
+    posterior_stat: str = "both"
     # delta-basis campaign for the posterior correction (auto-built/resumed if absent)
     basis_dir: Optional[str] = None            # default: "<analysis outdir>_basis"
     basis_np: int = 8                          # p grid points
@@ -72,7 +77,7 @@ class PopulationConfig:
     basis_p_range: tuple = (0.30, 0.80)
     basis_b_range_deg: tuple = (6.0, 84.0)
     basis_nseeds: int = 4
-    basis_nproc: Optional[int] = None          # default: cores - 2
+    basis_nproc: Optional[int] = None          # default: 8, capped at cores - 2
 
     base_dir: str = None
     # Arbitrary .obs directory (bypasses the naming convention). Used for both
@@ -89,6 +94,10 @@ class PopulationConfig:
             raise ValueError(
                 f"correction_method must be 'quadratic', 'posterior' or 'both', "
                 f"got {self.correction_method!r}")
+        if self.posterior_stat not in ("peak", "median", "both"):
+            raise ValueError(
+                f"posterior_stat must be 'peak', 'median' or 'both', "
+                f"got {self.posterior_stat!r}")
 
     def analysis_config(self) -> AnalysisConfig:
         return AnalysisConfig(
@@ -127,7 +136,8 @@ class PopulationResult:
     correction_path: Optional[str] = None
     sweep_csv: Optional[str] = None
     r2: Optional[tuple] = None             # (r2_p, r2_beta) of the quadratic fit
-    posterior: object = None               # synthetic.posterior.Posterior, if run
+    posterior: object = None               # headline Posterior (median channel if run)
+    posteriors: Optional[dict] = None      # {stat: Posterior} for each channel run
     basis_dir: Optional[str] = None
 
 
@@ -210,10 +220,11 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
         result.sweep_csv = sweep_csv
         result.r2 = (coeffs["diagnostics"]["r2_p"], coeffs["diagnostics"]["r2_b"])
 
-    # 3b–5b. posterior correction: delta basis -> forward table -> posterior
+    # 3b–5b. posterior correction: delta basis -> forward table(s) -> posterior(s)
     if cfg.correction_method in ("posterior", "both"):
         from .synthetic.basis import run_basis
-        from .synthetic.posterior import build_forward_table, posterior_correct, plot_posterior
+        from .synthetic.posterior import (build_forward_table, posterior_correct,
+                                          plot_posterior, recovered_stat_from_analysis)
 
         basis_dir = cfg.basis_dir or f"{outdir}_basis"
         print(f"[{cfg.pop_id}] posterior correction: delta basis at {basis_dir}")
@@ -223,21 +234,31 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
         run_basis(base_syn, p_grid, b_grid, nseeds=cfg.basis_nseeds,
                   seed=(seed or 0), outdir=basis_dir, nproc=cfg.basis_nproc)
 
-        table = build_forward_table(basis_dir)
-        post = posterior_correct(rec_p, rec_b, table)
-        post.save(os.path.join(outdir, "posterior.npz"))
-        plot_posterior(post, os.path.join(outdir, "posterior_correction.png"))
-        result.posterior = post
+        channels = (("peak", "median") if cfg.posterior_stat == "both"
+                    else (cfg.posterior_stat,))
+        result.posteriors = {}
+        for st in channels:
+            table = build_forward_table(basis_dir, stat=st)
+            obs = recovered_stat_from_analysis(outdir, st)
+            post = posterior_correct(obs[0], obs[1], table)
+            post.save(os.path.join(outdir, f"posterior_{st}.npz"))
+            plot_posterior(post, os.path.join(outdir, f"posterior_correction_{st}.png"))
+            result.posteriors[st] = post
+        # headline channel: median if available (continuous observable), else peak
+        result.posterior = result.posteriors.get("median",
+                                                 next(iter(result.posteriors.values())))
         result.basis_dir = basis_dir
 
-    _write_report(cfg, outdir, (rec_p, rec_b), result.corrected, coeffs, result.posterior)
+    _write_report(cfg, outdir, (rec_p, rec_b), result.corrected, coeffs,
+                  getattr(result, "posteriors", None))
 
     msg = f"[{cfg.pop_id}] recovered (p={rec_p:.3f}, β={rec_b:.1f}°)"
     if result.corrected is not None:
         msg += f"  ->  quadratic (p={result.corrected[0]:.3f}, β={result.corrected[1]:.1f}°)"
     if result.posterior is not None:
         po = result.posterior
-        msg += (f"  ->  posterior p={po.p_median:.3f} "
+        ch = "median" if "median" in (result.posteriors or {}) else "peak"
+        msg += (f"  ->  posterior[{ch}] p={po.p_median:.3f} "
                 f"[{po.p_lo68:.3f},{po.p_hi68:.3f}], β={po.b_median:.1f}° "
                 f"[{po.b_lo68:.1f},{po.b_hi68:.1f}]"
                 + ("  [MULTIMODAL]" if po.multimodal else ""))
@@ -245,7 +266,7 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     return result
 
 
-def _write_report(cfg, outdir, recovered, corrected=None, coeffs=None, posterior=None):
+def _write_report(cfg, outdir, recovered, corrected=None, coeffs=None, posteriors=None):
     with open(os.path.join(outdir, "population_report.txt"), "w") as f:
         f.write(f"# Population pipeline report: {cfg.pop_id} ({cfg.population_kind})\n")
         f.write(f"# catalog={cfg.cat} filter={cfg.filterpriority} "
@@ -270,23 +291,41 @@ def _write_report(cfg, outdir, recovered, corrected=None, coeffs=None, posterior
             f.write("p          %9.4f   %9.4f\n" % (recovered[0], corrected[0]))
             f.write("beta_deg   %9.2f   %9.2f\n" % (recovered[1], corrected[1]))
 
-        if posterior is not None:
-            po = posterior
-            f.write("\n== posterior correction (probabilistic; per-population delta basis) ==\n")
-            f.write("quantity   recovered      median  68% interval        95% interval        MAP\n")
-            f.write("p          %9.4f   %9.4f  [%6.4f, %6.4f]  [%6.4f, %6.4f]  %6.4f\n"
-                    % (recovered[0], po.p_median, po.p_lo68, po.p_hi68,
-                       po.p_lo95, po.p_hi95, po.p_map))
-            f.write("beta_deg   %9.2f   %9.2f  [%6.2f, %6.2f]  [%6.2f, %6.2f]  %6.2f\n"
-                    % (recovered[1], po.b_median, po.b_lo68, po.b_hi68,
-                       po.b_lo95, po.b_hi95, po.b_map))
-            if po.multimodal:
-                f.write(f"# WARNING: the posterior is MULTIMODAL ({po.n_modes} modes) — the "
-                        "p-beta degeneracy admits several true populations consistent with "
-                        "this recovery; see posterior_correction.png before quoting a single "
-                        "value.\n")
-            edge = (po.p_median <= po.p_grid[0] + 0.02 or po.p_median >= po.p_grid[-1] - 0.02
-                    or po.b_median <= po.b_grid[0] + 2 or po.b_median >= po.b_grid[-1] - 2)
-            if edge:
-                f.write("# NOTE: the posterior peaks near the edge of the basis grid — "
-                        "consider widening basis_p_range / basis_b_range_deg.\n")
+        if posteriors:
+            for st, po in posteriors.items():
+                f.write(f"\n== posterior correction, {st} channel "
+                        "(probabilistic; per-population delta basis) ==\n")
+                f.write("quantity   observed       median  68% interval        95% interval        MAP\n")
+                f.write("p          %9.4f   %9.4f  [%6.4f, %6.4f]  [%6.4f, %6.4f]  %6.4f\n"
+                        % (po.observed[0], po.p_median, po.p_lo68, po.p_hi68,
+                           po.p_lo95, po.p_hi95, po.p_map))
+                f.write("beta_deg   %9.2f   %9.2f  [%6.2f, %6.2f]  [%6.2f, %6.2f]  %6.2f\n"
+                        % (po.observed[1], po.b_median, po.b_lo68, po.b_hi68,
+                           po.b_lo95, po.b_hi95, po.b_map))
+                if po.multimodal:
+                    f.write(f"# WARNING: the posterior is MULTIMODAL ({po.n_modes} modes) — the "
+                            "p-beta degeneracy admits several true populations consistent with "
+                            f"this recovery; see posterior_correction_{st}.png before quoting a "
+                            "single value.\n")
+                edge = (po.p_median <= po.p_grid[0] + 0.02 or po.p_median >= po.p_grid[-1] - 0.02
+                        or po.b_median <= po.b_grid[0] + 2 or po.b_median >= po.b_grid[-1] - 2)
+                if edge:
+                    f.write("# NOTE: the posterior peaks near the edge of the basis grid — "
+                            "consider widening basis_p_range / basis_b_range_deg.\n")
+
+            # cross-channel consistency: for a genuinely single-peaked population,
+            # the peak- and median-channel posteriors must agree within errors.
+            if "peak" in posteriors and "median" in posteriors:
+                a, b = posteriors["peak"], posteriors["median"]
+                ok_p = max(a.p_lo68, b.p_lo68) <= min(a.p_hi68, b.p_hi68)
+                ok_b = max(a.b_lo68, b.b_lo68) <= min(a.b_hi68, b.b_hi68)
+                if ok_p and ok_b:
+                    f.write("\n# CONSISTENCY: peak- and median-channel posteriors agree "
+                            "(68% intervals overlap in both p and beta) — compatible with a "
+                            "single-peaked population.\n")
+                else:
+                    which = ", ".join(x for x, ok in (("p", ok_p), ("beta", ok_b)) if not ok)
+                    f.write(f"\n# WARNING: peak- and median-channel posteriors DISAGREE in "
+                            f"{which} (68% intervals do not overlap) — the population may be "
+                            "skewed or multimodal rather than single-peaked; inspect the "
+                            "posterior maps and the unfolded f(p, beta).\n")

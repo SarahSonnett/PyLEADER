@@ -49,6 +49,10 @@ def main(argv=None) -> int:
     res.save(npz)
     plot_unfolded(res, png)
     print(f"Unfolded f(p, beta): relerr={res.relerr:.4f}, alpha={res.alpha:.3g}")
+    print(f"  population median p    = {res.pop_median_p:.3f} "
+          f"[{res.pop_median_p_lo:.3f}, {res.pop_median_p_hi:.3f}] (16-84%, statistical only)")
+    print(f"  population median beta = {res.pop_median_b:.1f} deg "
+          f"[{res.pop_median_b_lo:.1f}, {res.pop_median_b_hi:.1f}] (16-84%, statistical only)")
     print(f"  {npz}\n  {png}")
     return 0
 

@@ -61,7 +61,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--basis-nseeds", type=int, default=d.basis_nseeds,
                    help="realizations per basis grid point (default 4)")
     p.add_argument("--basis-nproc", type=int, default=None,
-                   help="parallel workers for the basis (default: cores - 2)")
+                   help="parallel workers for the basis (default: 8, capped at cores - 2)")
+    p.add_argument("--posterior-stat", choices=("peak", "median", "both"), default=d.posterior_stat,
+                   help="recovered statistic the posterior inverts; 'both' (default) also "
+                        "reports a peak-vs-median consistency check")
     p.add_argument("--base-dir", default=None)
     p.add_argument("--obsdir", default=None,
                    help="read/write .obs from this exact directory (bypasses the naming convention); "
@@ -85,7 +88,7 @@ def main(argv=None) -> int:
         sweep_ndraws=a.sweep_ndraws, nseeds=a.nseeds, scattering=a.scattering,
         correction_stat=a.correction_stat, correction_method=a.correction_method,
         basis_dir=a.basis_dir, basis_nseeds=a.basis_nseeds, basis_nproc=a.basis_nproc,
-        base_dir=a.base_dir, obsdir=a.obsdir,
+        posterior_stat=a.posterior_stat, base_dir=a.base_dir, obsdir=a.obsdir,
     )
     res = run_population(cfg, do_build=a.build, refresh_models=a.refresh_models, seed=a.seed)
     print(f"\nDone. Report + correction in: {res.outdir}")

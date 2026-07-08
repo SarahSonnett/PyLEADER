@@ -353,11 +353,16 @@ pyleader-basis 1128 --diam-low 1 --diam-high 100      # 8×8 grid × 4 seeds (de
   Runtime ≈ 21 s per unit single-core → **~10–15 min pooled** for the default 256 units.
 
 **Step 5b — Posterior correction** (inside `pyleader-population`; default `--correction-method both`):
-the recovered peak is inverted through the basis with Bayes' rule, yielding a **posterior over the
-true `(p, β)`** — median, 68%/95% credible intervals, MAP, and a **multimodality flag** where the
-degeneracy admits several answers (reported in `population_report.txt`;
-`posterior_correction.png` + `posterior.npz` are written beside it). The basis is auto-built (and
-auto-resumed) if absent.
+a recovered summary statistic is inverted through the basis with Bayes' rule, yielding a
+**posterior over the true `(p, β)` peak** — median, 68%/95% credible intervals, MAP, and a
+**multimodality flag** where the degeneracy admits several answers. Two measurement **channels**
+are available via `--posterior-stat {peak,median,both}` *(default `both`)*: the recovered
+**peak** (marginal argmax) and the recovered **median** (weighted median of the marginals — a
+continuous, less bin-quantized observable). Running both doubles as a **consistency check**,
+reported in `population_report.txt`: for a genuinely single-peaked population the two channels
+must agree (overlapping 68% intervals); disagreement flags a skewed or multimodal population.
+Per-channel artifacts: `posterior_correction_{peak,median}.png` + `posterior_{peak,median}.npz`.
+The basis is auto-built (and auto-resumed) if absent.
 
 **Step 6b — Unfold the full distribution** (`pyleader-unfold` / `python scripts/unfold_analysis.py`):
 
@@ -400,8 +405,10 @@ pyleader-population BG_IB_Ctypes --build
   - `--correction-stat {peak,mean,median}` *(default* `peak`*)*
   - `--correction-method {quadratic,posterior,both}` which correction(s) to derive *(default*
     `both`*; posterior auto-builds/resumes the Step-4b delta basis)*
+  - `--posterior-stat {peak,median,both}` which recovered statistic the posterior inverts
+    *(default* `both`*, which also reports the peak-vs-median consistency check)*
   - `--basis-dir PATH` *(default* `<analysis outdir>_basis`*)*; `--basis-nseeds N` *(default 4)*;
-    `--basis-nproc N` parallel workers *(default: cores − 2)*
+    `--basis-nproc N` parallel workers *(default: 8, capped at cores − 2)*
   - `--build`
   - `--refresh-models` re-download the latest DAMIT models first
   - `--base-dir PATH`
@@ -468,9 +475,17 @@ and place it in `--base-dir`. Steps 2–3 stop early with these instructions if 
 ```python
 from pyleader import PopulationConfig, run_population
 
-result = run_population(PopulationConfig(pop_id="1128", diam_low=1, diam_high=100), seed=0)
-print(result.recovered, "->", result.corrected)   # (p, β_deg) before and after correction
+if __name__ == "__main__":   # required: the parallel basis uses multiprocessing 'spawn'
+    result = run_population(PopulationConfig(pop_id="1128", diam_low=1, diam_high=100), seed=0)
+    print(result.recovered, "->", result.corrected)        # quadratic correction
+    print(result.posterior.p_median, result.posterior.b_median)  # posterior (median channel)
 ```
+
+> **Note:** wrap library calls that reach the parallel basis (`run_population` with the posterior
+> enabled, or `run_basis`) in the `if __name__ == "__main__":` guard — Python's `spawn`
+> multiprocessing re-imports your script in each worker, and without the guard your script's
+> top-level code re-executes per worker. PyLEADER detects the unguarded/interactive cases and
+> falls back to serial execution with a note, but the guard is what gets you parallelism.
 
 
 

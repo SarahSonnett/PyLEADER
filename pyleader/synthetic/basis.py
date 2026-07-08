@@ -136,7 +136,31 @@ def run_basis(base_cfg: SyntheticConfig, p_grid, b_grid, *,
     jobs = [(base_cfg, p, b, out, _unit_seed(seed, ip, ib, s, nb))
             for (ip, ib, s, p, b, out) in pending]
 
-    nproc = nproc or max(1, (os.cpu_count() or 2) - 2)
+    # Default worker count: 8, capped at (cores - 2) on smaller machines —
+    # leaves plenty of headroom for interactive work (calls, other agents).
+    nproc = nproc or max(1, min(8, (os.cpu_count() or 2) - 2))
+
+    # The 'spawn' start method re-imports the parent's __main__; in an
+    # interactive session (REPL / piped stdin) there is no importable main
+    # module and the workers crash. Detect that and fall back to serial.
+    if nproc > 1:
+        import __main__ as _main
+        main_file = getattr(_main, "__file__", None)
+        if main_file is None or not os.path.exists(main_file):
+            print("NOTE: interactive session detected (no importable __main__); "
+                  "running the basis serially. Use the pyleader-basis CLI (or a "
+                  "script file) for parallel execution.")
+            nproc = 1
+
+    # Re-entrancy guard: if a user script calls run_basis without the standard
+    # `if __name__ == "__main__":` guard, spawn's re-import of that script would
+    # start nested pools. Children inherit this env var and run serially instead.
+    if os.environ.get("_PYLEADER_BASIS_PARENT"):
+        print("NOTE: run_basis re-entered from a multiprocessing worker — your "
+              "calling script is missing the `if __name__ == '__main__':` guard "
+              "required by multiprocessing; running serially here. Add the guard "
+              "to avoid duplicated work.")
+        nproc = 1
     ndone = 0
     if nproc == 1:
         for job in jobs:
@@ -146,11 +170,15 @@ def run_basis(base_cfg: SyntheticConfig, p_grid, b_grid, *,
                   end="", flush=True)
     else:
         ctx = mp.get_context("spawn")  # macOS-safe
-        with ctx.Pool(processes=nproc) as pool:
-            for _ in pool.imap_unordered(_run_unit, jobs):
-                ndone += 1
-                print(f"\rBasis: {ndone}/{len(jobs)} ({100.0 * ndone / len(jobs):4.0f}%)"
-                      f"  [{nproc} workers]", end="", flush=True)
+        os.environ["_PYLEADER_BASIS_PARENT"] = "1"   # inherited by workers
+        try:
+            with ctx.Pool(processes=nproc) as pool:
+                for _ in pool.imap_unordered(_run_unit, jobs):
+                    ndone += 1
+                    print(f"\rBasis: {ndone}/{len(jobs)} ({100.0 * ndone / len(jobs):4.0f}%)"
+                          f"  [{nproc} workers]", end="", flush=True)
+        finally:
+            os.environ.pop("_PYLEADER_BASIS_PARENT", None)
     print()
     return outdir
 

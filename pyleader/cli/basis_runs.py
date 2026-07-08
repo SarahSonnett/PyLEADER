@@ -59,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     # execution
     p.add_argument("--outdir", default=None,
                    help="basis directory (default: '<analysis outdir>_basis' next to the analysis)")
-    p.add_argument("--nproc", type=int, default=None, help="worker processes (default: cores - 2)")
+    p.add_argument("--nproc", type=int, default=None, help="worker processes (default: 8, capped at cores - 2)")
     p.add_argument("--task", default=None, metavar="k/N", help="run only the k-th of N chunks")
     p.add_argument("--seed", type=int, default=0, help="base RNG seed")
     return p
