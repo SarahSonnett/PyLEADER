@@ -43,14 +43,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--outdir", required=True, help="parent directory for the bias map")
     p.add_argument("--seed", type=int, default=0, help="base RNG seed")
     p.add_argument("--nseeds", type=int, default=1, help="seeds (realizations) per grid point")
+    p.add_argument("--noise-model", choices=("empirical", "flat"), default="empirical",
+                   help="synthetic photometric noise: 'empirical' (default) fits the "
+                        "geometry files' own flux-fluxerr relation; 'flat' is the "
+                        "original 1%% Gaussian")
     return p
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    noise = None
+    if args.noise_model == "empirical":
+        import glob as _glob
+        from pyleader.pipeline import fit_population_noise
+        geom = sorted(_glob.glob(os.path.join(args.geometry_dir, "*.obs")))
+        geom = [g for g in geom if not os.path.basename(g).startswith("Nofilter")]
+        os.makedirs(args.outdir, exist_ok=True)
+        noise = fit_population_noise(geom, docdir=args.outdir)
     base_cfg = SyntheticConfig(
         Ndraws=args.ndraws, scattering=args.scattering, damit_dir=args.damit_dir,
         geometry_dir=args.geometry_dir, damit_list=args.damit_list, base_dir=args.base_dir,
+        noise_model=noise,
     )
     # CLI takes beta in degrees; internal configs/math use radians.
     b_peaks_rad = [math.radians(b) for b in args.b_peaks]

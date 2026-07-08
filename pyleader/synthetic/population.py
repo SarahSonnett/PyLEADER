@@ -147,13 +147,14 @@ def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool =
             props = _draw_shape(model_files, cfg)
             beta = _draw_beta(cfg)
 
-        dates, e_sun, e_earth, ang = read_synth_geometry(
-            random.choice(geom_files), cfg.phase_angle_limit
+        dates, e_sun, e_earth, ang, flux = read_synth_geometry(
+            random.choice(geom_files), cfg.phase_angle_limit, with_flux=True
         )
         if len(dates) == 0:
             continue
 
-        A, _ = synthetic_amplitudes(props.normals, props.areas, dates, e_sun, e_earth, ang, beta, cfg)
+        A, _ = synthetic_amplitudes(props.normals, props.areas, dates, e_sun, e_earth,
+                                    ang, beta, cfg, real_flux=flux)
 
         A_tot.extend(list(A))
         p_true.append(props.p)

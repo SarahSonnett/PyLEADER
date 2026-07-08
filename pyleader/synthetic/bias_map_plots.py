@@ -68,7 +68,7 @@ def plot_bias_map(csv_path: str, out_png: str | None = None, *, show: bool = Fal
     asgn_p = [np.mean([r["p_assigned_mean"] for r in rows if r["p_peak"] == x]) for x in p_x]
     axp.plot(p_x, asgn_p, "k--", marker="s", label="assigned (true)")
     axp.set_xlabel("assigned  p_peak")
-    axp.set_ylabel("mean p")
+    axp.set_ylabel("recovered mean p")
     axp.set_title("Shape elongation p: recovered vs assigned")
     axp.grid(True, alpha=0.3)
     axp.legend(fontsize=8)
@@ -80,7 +80,7 @@ def plot_bias_map(csv_path: str, out_png: str | None = None, *, show: bool = Fal
     asgn_b = [np.mean([r["beta_assigned_mean"] for r in rows if r["b_peak_deg"] == x]) for x in b_x]
     axb.plot(b_x, asgn_b, "k--", marker="s", label="assigned (true)")
     axb.set_xlabel("assigned  β_peak (deg)")
-    axb.set_ylabel("mean β (deg)")
+    axb.set_ylabel("recovered mean β (deg)")
     axb.set_title(r"Spin latitude $\beta$: recovered vs assigned")
     axb.grid(True, alpha=0.3)
     axb.legend(fontsize=8)

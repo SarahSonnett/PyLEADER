@@ -40,6 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--date-tol", type=float, default=d.date_tol, help="max JD gap within an apparition")
     p.add_argument("--phase-angle-limit", type=float, default=d.phase_angle_limit, help="max solar phase angle (deg)")
     p.add_argument("--noise-level", type=float, default=d.noise_level, help="fractional Gaussian noise on L")
+    p.add_argument("--noise-model", choices=("empirical", "flat"), default="flat",
+                   help="'empirical' fits the geometry files' flux-fluxerr relation and "
+                        "overrides --noise-level (default: flat, for a controlled experiment)")
     p.add_argument("--scattering", choices=("ls_lambert", "hapke"), default=d.scattering, help="scattering law")
     p.add_argument("--trot-min-hr", type=float, default=d.trot_min_hr, help="min rotation period (hours)")
     p.add_argument("--trot-max-hr", type=float, default=d.trot_max_hr, help="max rotation period (hours)")
@@ -59,10 +62,17 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     # CLI takes beta in degrees; internal configs/math use radians.
     b_peak_rad = math.radians(args.b_peak) if args.b_peak is not None else None
+    noise = None
+    if args.noise_model == "empirical":
+        import glob as _glob
+        from pyleader.pipeline import fit_population_noise
+        geom = sorted(_glob.glob(os.path.join(args.geometry_dir, "*.obs")))
+        geom = [g for g in geom if not os.path.basename(g).startswith("Nofilter")]
+        noise = fit_population_noise(geom)
     cfg = SyntheticConfig(
         p_peak=args.p_peak, b_peak=b_peak_rad, Ndraws=args.ndraws, wanted=args.wanted,
         date_tol=args.date_tol, phase_angle_limit=args.phase_angle_limit,
-        noise_level=args.noise_level, scattering=args.scattering,
+        noise_level=args.noise_level, noise_model=noise, scattering=args.scattering,
         trot_min_hr=args.trot_min_hr, trot_max_hr=args.trot_max_hr,
         convert2degrees=args.convert2degrees, damit_list=args.damit_list,
         damit_dir=args.damit_dir, geometry_dir=args.geometry_dir,

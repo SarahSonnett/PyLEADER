@@ -21,12 +21,19 @@ from .geometry import transform_mat
 from .scattering import hapke_bright, ls_lambert
 
 
-def synthetic_amplitudes(normals, areas, dates, e_sun, e_earth, ang, beta, cfg):
+def synthetic_amplitudes(normals, areas, dates, e_sun, e_earth, ang, beta, cfg,
+                         real_flux=None):
     """Render a synthetic light curve for an assigned spin and reduce it to ``A``.
 
     Nuisance parameters (pole longitude ``lambda`` and rotation period ``Trot``)
     are drawn internally as in the MATLAB code; the assigned spin latitude
     ``beta`` is passed in (and recorded by the caller). Returns ``(A, Nappar)``.
+
+    ``real_flux`` (the borrowed object's measured fluxes at the same epochs)
+    enables the empirical noise model: the model brightness is scaled to the
+    real mean flux, and ``cfg.noise_model`` supplies a per-epoch relative
+    uncertainty. Without it (or without a fitted model) the original flat
+    ``cfg.noise_level`` Gaussian is used.
     """
     normals = np.asarray(normals, dtype=float)
     areas = np.asarray(areas, dtype=float)
@@ -57,8 +64,16 @@ def synthetic_amplitudes(normals, areas, dates, e_sun, e_earth, ang, beta, cfg):
         else:  # ls_lambert (default)
             L[i] = np.sum(visible * areas * ls_lambert(mu, mu0))
 
-    # Add fractional Gaussian noise
-    L = L + cfg.noise_level * np.mean(L) * np.random.randn(len(L))
+    # Add photometric noise: heteroscedastic from the population's fitted
+    # flux-fluxerr relation when available, else the flat fractional default.
+    nm = getattr(cfg, "noise_model", None)
+    if nm is not None and real_flux is not None and len(real_flux) and np.mean(L) > 0:
+        # map model units -> physical flux via the borrowed object's mean flux
+        scale = np.mean(real_flux) / np.mean(L)
+        sigma = nm.relerr(L * scale) * L        # per-epoch absolute sigma (model units)
+        L = L + sigma * np.random.randn(len(L))
+    else:
+        L = L + cfg.noise_level * np.mean(L) * np.random.randn(len(L))
 
     # Reduce to amplitudes via the shared machinery
     L_back, pointsperapp, ang_back, _dates_back, Nappar = split_apparitions(

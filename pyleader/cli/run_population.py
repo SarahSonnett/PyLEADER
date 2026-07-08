@@ -52,6 +52,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bias-map-nseeds", type=int, default=d.bias_map_nseeds,
                    help="seeds per bias-map grid point")
     p.add_argument("--scattering", choices=("ls_lambert", "hapke"), default=d.scattering)
+    p.add_argument("--noise-model", choices=("empirical", "flat"), default=d.noise_model,
+                   help="synthetic photometric noise: 'empirical' (default) fits the "
+                        "population's own flux-fluxerr relation; 'flat' is the original "
+                        "1%% Gaussian")
     p.add_argument("--correction-stat", choices=("peak", "mean", "median"), default=d.correction_stat)
     p.add_argument("--correction-method", choices=("quadratic", "posterior", "both"),
                    default=d.correction_method,
@@ -88,7 +92,7 @@ def main(argv=None) -> int:
         # CLI takes beta in degrees; the config/API level uses radians.
         b_peaks=tuple(math.radians(b) for b in a.b_peaks),
         bias_map_ndraws=a.bias_map_ndraws, bias_map_nseeds=a.bias_map_nseeds,
-        scattering=a.scattering,
+        scattering=a.scattering, noise_model=a.noise_model,
         correction_stat=a.correction_stat, correction_method=a.correction_method,
         basis_dir=a.basis_dir, basis_nseeds=a.basis_nseeds, basis_nproc=a.basis_nproc,
         posterior_stat=a.posterior_stat, base_dir=a.base_dir, obsdir=a.obsdir,

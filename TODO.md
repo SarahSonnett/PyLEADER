@@ -26,12 +26,24 @@ Remaining / nice-to-have:
 
 - [x] Posterior-inversion correction + response-matrix unfolding per
       [docs/plans/correction_v2_posterior_and_unfolding.md](docs/plans/correction_v2_posterior_and_unfolding.md):
-      `pyleader-basis` (parallel/resumable/chunkable delta basis), posterior correction with
+      `pyleader-basis` (parallel/resumable/chunkable fixed-peak basis), posterior correction with
       68/95% credible intervals + multimodality flag (`run_population --correction-method`),
       and `pyleader-unfold` (full f(p, β) with 16–84% bands).
 - [ ] **CDF-space response refinement** — remove the measured mixture-linearity model error of the
       W-space unfolding by building response columns from simulated amplitude CDFs (exactly
       linear in mixtures). See the plan doc's "Follow-on refinement".
+- [ ] **Covariance pooling across neighboring basis grid points** (optional ultra-precise mode) —
+      each forward-table covariance is estimated from only `nseeds` realizations, so it carries
+      ~`1/sqrt(2(nseeds-1))` relative noise that propagates into the credible intervals. Pooling
+      (or smoothing) the covariance estimates over neighboring `(p, β)` grid points would
+      stabilize the forward table **without new simulations** — worthwhile when someone needs
+      ultra-precise intervals but cannot afford 16+ seeds. Expose as an opt-in flag
+      (e.g. `--pool-covariance`) so the default stays strictly local.
+- [ ] **Regenerate production bases/bias maps under the empirical noise model** — bases built
+      before the per-population flux-fluxerr noise model (added 2026-07-08) used flat 1% noise,
+      which badly understates NEOWISE uncertainties (Fam1128 median relerr ≈ 30%), so their
+      corrections understate the bias. `run_basis` warns when resuming such a directory; rebuild
+      in a fresh `--outdir` (or pass `--noise-model flat` to reproduce the old behaviour).
 
 ## Optional follow-on tooling (deferred)
 

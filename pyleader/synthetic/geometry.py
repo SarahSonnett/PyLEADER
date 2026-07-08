@@ -37,28 +37,40 @@ def _normr(mat: np.ndarray) -> np.ndarray:
     return mat / norms
 
 
-def read_synth_geometry(path: str, phase_angle_limit: float = 30.0):
+def select_best_filter(obs) -> int:
+    """The WISE filter index (0–3) with the smallest overall error norm.
+
+    The rule the synthetic side has always used to decide which filter's
+    measurements a borrowed ``.obs`` geometry represents; also used by the
+    empirical noise model so it is fit to the same measurements.
+    """
+    errs = []
+    for k in range(4):
+        e = [obs.fluxerr[i][k] for i in range(obs.n) if obs.fluxerr[i][k] is not None]
+        errs.append(np.linalg.norm(e) if e else 0)
+    errs = [e if e != 0 else np.inf for e in errs]
+    return errs.index(min(errs))
+
+
+def read_synth_geometry(path: str, phase_angle_limit: float = 30.0, *,
+                        with_flux: bool = False):
     """Read a WISE ``.obs`` file for its observing geometry.
 
     Returns ``(dates, e_sun, e_earth, ang)`` after selecting the best filter,
     normalizing the Sun/observer directions, and dropping epochs with solar
-    phase angle above ``phase_angle_limit`` (degrees). Only the geometry is
-    used downstream; the synthetic brightness is computed from the shape model.
+    phase angle above ``phase_angle_limit`` (degrees). The synthetic brightness
+    is computed from the shape model; with ``with_flux=True`` the object's real
+    measured fluxes at the same epochs are appended to the return value (they
+    anchor the empirical noise model's flux scale).
     """
     obs = read_obs(path)
     nblocks = obs.n
     dates = obs.dates
     e_sun = obs.e_sun
     e_earth = obs.e_earth
-    flux, fluxerr = obs.flux, obs.fluxerr
+    flux = obs.flux
 
-    # per-filter error to choose the best filter
-    errs = []
-    for k in range(4):
-        e = [fluxerr[i][k] for i in range(nblocks) if fluxerr[i][k] is not None]
-        errs.append(np.linalg.norm(e) if e else 0)
-    errs = [e if e != 0 else np.inf for e in errs]
-    bestf = errs.index(min(errs))
+    bestf = select_best_filter(obs)
 
     keep = [i for i in range(nblocks) if flux[i][bestf] is not None]
     keep = np.asarray(keep, dtype=int)
@@ -72,4 +84,5 @@ def read_synth_geometry(path: str, phase_angle_limit: float = 30.0):
     ang = np.arccos(np.clip(np.sum(e_sun * e_earth, axis=1), -1.0, 1.0))
     good = ang <= ang_tol
 
-    return dates[good], e_sun[good], e_earth[good], ang[good]
+    out = (dates[good], e_sun[good], e_earth[good], ang[good])
+    return out + (L_big[good],) if with_flux else out

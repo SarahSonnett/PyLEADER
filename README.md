@@ -256,6 +256,24 @@ python scripts/spot_check.py       # outside a virtual environment
 builds synthetic populations with *assigned* `(p, β)` distributions from DAMIT shapes observed at
 the target geometry, runs them through LEADER, and tabulates recovered-vs-assigned statistics
 across a grid of assigned peaks.
+- **Assigned-distribution scatter:** the synthetic objects are not all placed *exactly* at the
+  assigned peaks; five `SyntheticConfig` fields (library API; not CLI flags) control the spread,
+  with defaults taken directly from the original LEADER release (Nortunen & Kaasalainen 2017):
+  `p_accept_tol = 0.075` (a stretched DAMIT shape is accepted when its `p` is within this of the
+  peak), `p_escape_chance = 0.1` and `p_escape_min = 0.45` (a 10% chance to accept an off-peak
+  shape anyway, provided `p` exceeds 0.45 — a broad tail), `beta_peak_chance = 0.75` (75% of
+  objects draw `β` near the peak, the rest uniformly over 0–90°) and `beta_jitter = 0.05` rad
+  (the Gaussian width around `β_peak`). The Step-4b fixed-peak preset overrides these to
+  near-delta values (`0.02 / 0.0 / – / 1.0 / 0.01`).
+- **Photometric noise:** by default (`--noise-model empirical`) the synthetic fluxes receive
+  noise from the population's **own flux–uncertainty relation**: a quadratic in log–log space,
+  `log₁₀(σ_F/F) = c₀ + c₁·log₁₀(F) + c₂·log₁₀(F)²`, fit once to every (flux, fluxerr) pair in
+  the geometry `.obs` files and documented as `noise_model.json` + `noise_model_fit.png`. Each
+  synthetic brightness is scaled to its borrowed object's mean measured flux and the relation is
+  evaluated **per epoch**, so fainter objects — and fainter rotational phases — get
+  proportionally larger errors. This matters: the original release's flat 1% Gaussian
+  (`--noise-model flat`) understates typical NEOWISE uncertainties by an order of magnitude
+  (e.g. family 1128's median relative error is ≈30%), which understates the recovery bias.
 - **`pyleader-bias-map` vs `pyleader-spot-check`:** the **bias map** runs one synthetic experiment per
   point of an assigned `(p_peak, β_peak)` **grid** (× `nseeds` realizations) and tabulates the
   results — its purpose is to *map the recovery bias across parameter space*, producing the table
@@ -282,6 +300,8 @@ across a grid of assigned peaks.
     machines, or let* `pyleader-population` *use the population's own files)*
   - `--outdir PATH` *(required for the bias map; for* `pyleader-spot-check` *it defaults to*
     `<base-dir>/synthetic_validation_p<P>_b<B>deg`*)*
+  - `--noise-model {empirical,flat}` photometric noise for the synthetic fluxes *(default*
+    `empirical`*, fit from the geometry files — see above)*
   - `--seed N`
 - **Output:**
   - `bias_map_stats.csv` (one row per grid point × seed: min/max/mean/median of assigned vs. recovered
@@ -347,6 +367,17 @@ the p–β degeneracy (e.g. a sphere at β=0 vs. an elongated object seen pole-o
 recovered→true mapping many-to-one, and the quadratic silently picks one answer. The probabilistic
 path replaces it with a Bayesian inversion of a sampled forward model.
 
+The two corrections are **fundamentally different and independent**: the quadratic is a
+deterministic least-squares surface fit to the bias-map means (Steps 4–5), while the posterior
+inverts a separately simulated fixed-peak forward model (Steps 4b–5b) — different simulations,
+different mathematics, no shared fitted parameters. That independence is exactly why the pipeline
+runs **both by default** (`--correction-method both`): when two unrelated estimators land on
+compatible answers, confidence in the result rises; when they disagree, something specific is
+being flagged — usually the quadratic extrapolating outside its fitted range, or the degeneracy
+making a single-valued correction inadequate (a multimodal posterior). The posterior's credible
+intervals are the primary uncertainty statement; the quadratic serves as its fast, independent
+cross-check.
+
 **Step 4b — Build the fixed-peak basis** (`pyleader-basis` / `python scripts/basis_runs.py`):
 
 ```sh
@@ -361,8 +392,13 @@ pyleader-basis 1128 --diam-low 1 --diam-high 100      # 8×8 grid × 4 seeds (de
   flag `--task k/N` supports cluster job arrays.
 - **Arguments:** `--grid-np/--grid-nb` grid size *(default 8×8)*; `--p-range LO HI` *(default
   0.30 0.80)*; `--b-range LO HI` in degrees *(default 6 84)*; `--nseeds` *(default 4)*;
-  `--ndraws` *(default 1000)*; `--nproc`; `--task k/N`; `--outdir` *(default
+  `--ndraws` *(default 1000)*; `--noise-model {empirical,flat}` *(default* `empirical`*; the fit
+  is recorded in the basis directory)*; `--nproc`; `--task k/N`; `--outdir` *(default
   `<analysis outdir>_basis`)*; plus the Step-3 population/tolerance options.
+- **Consistency:** a basis must be built under **one** noise model throughout — mixing units is
+  invalid, so `pyleader-basis` warns when resuming a directory whose existing units used a
+  different one (bases predating the empirical model count as flat). Rebuild in a fresh
+  `--outdir` after changing the noise model.
 - **Output:** one `gp_p*_b*_seed*/synthetic_result.npz` per unit + `basis_info.json`.
 - **Runtime & how many seeds:** each unit takes ≈ 21 s single-core, so wall time ≈ units × 21 s ÷
   workers — the default 8×8 grid × 4 seeds takes **~10–15 min** on 8 workers (× 8 seeds ~25 min,
@@ -378,7 +414,29 @@ pyleader-basis 1128 --diam-low 1 --diam-high 100      # 8×8 grid × 4 seeds (de
 a recovered summary statistic is inverted through the basis with Bayes' rule, yielding a
 **posterior over the true `(p, β)` peak** — median, 68%/95% credible intervals, the mode
 (the single most probable value; the statistical term is MAP), and a
-**multimodality flag** where the degeneracy admits several answers. Two measurement **channels**
+**multimodality flag** where the degeneracy admits several answers.
+
+**How Bayes' rule enters.** The basis answers the *forward* question by brute force: "if the truth
+were `(p, β)`, what would LEADER recover?" — at each assigned grid point the `nseeds` realizations
+give the mean and scatter of the recovered statistic, i.e. an empirical likelihood
+`P(recovered | truth)` (modeled as a Gaussian with that mean and covariance). Bayes' rule turns
+this around into the question actually being asked:
+
+$$P(\mathrm{truth} \mid \mathrm{recovered}) \;\propto\; P(\mathrm{recovered} \mid \mathrm{truth}) \times P(\mathrm{truth})$$
+
+With a flat (uninformative) prior `P(truth)` over the basis grid, the posterior at each candidate
+truth is simply the Gaussian likelihood of the *one observed* recovery evaluated against that grid
+point's forward mean/covariance, normalized over the grid. No fitting is involved — the basis
+**is** the model.
+
+**Reading the 2-D posterior map.** A **diagonal ridge** (or a tilted, elongated credible region)
+in the `(p, β)` probability heatmap is *expected* and is not a numerical problem: it is the
+p–β degeneracy made visible. Different `(p, β)` combinations produce nearly identical amplitude
+statistics (a rounder shape at low `β` mimics an elongated one seen pole-on), so a whole diagonal
+family of truths is consistent with one recovery, and the posterior honestly assigns them all
+probability. When the ridge breaks into disjoint islands, the multimodality flag fires.
+
+Two measurement **channels**
 are available via `--posterior-stat {peak,median,both}` *(default `both`)*: the recovered
 **peak** (marginal argmax) and the recovered **median** (weighted median of the marginals — a
 continuous, less bin-quantized observable). Running both doubles as a **consistency check**,
@@ -433,6 +491,8 @@ pyleader-population BG_IB_Ctypes --build
   - the positional population `ID` *(required)*
   - the Step-3 analysis options (`--diam-low/-high`, `--ntrials`, `--ndraws`, `--phase-angle-limit`, `--date-tol`, `--wanted`)
   - the Step-4 bias-map options (`--p-peaks`, `--b-peaks`, `--bias-map-ndraws`, `--bias-map-nseeds`, `--scattering`)
+  - `--noise-model {empirical,flat}` synthetic photometric noise *(default* `empirical`*: the
+    population's own flux–fluxerr relation, fit once and applied per epoch; see Step 4)*
   - `--correction-stat {peak,mean,median}` *(default* `peak`*)*
   - `--correction-method {quadratic,posterior,both}` which correction(s) to derive *(default*
     `both`*; posterior auto-builds/resumes the Step-4b fixed-peak basis)*
@@ -449,7 +509,8 @@ pyleader-population BG_IB_Ctypes --build
   - the analysis directory `<...>_analysis_<...>/` with the per-`Trial*/` diagnostics and a
     **`summary/`** subdirectory holding every headline product in one place:
     `population_report.txt`, `SummaryAnalysis_*.txt`, `analysis.log`, the
-    `Summary_pmax/betamax_*.png` histograms, `DF_p_all`/`DF_b_all`, the quadratic correction
+    `Summary_pmax/betamax_*.png` histograms, `DF_p_all`/`DF_b_all`, the fitted noise model
+    (`noise_model.json` + `noise_model_fit.png`), the quadratic correction
     (`quadratic_correction.json` + `quadratic_correction_fit.png` + `bias_map_summary.png`), the
     posterior products (`posterior_correction_{peak,median}.png` + npz), and — after
     `pyleader-unfold` — `population_distribution.png`/`.npz`.
@@ -581,6 +642,34 @@ Applying it de-biases the LEADER result for the population (`population_report.t
 As the bias map predicts, `p` is corrected upward, and `β` — only weakly constrained by amplitudes and
 here near the low edge of the synthetic recovered range (`β_rec ∈ [28°, 90°]`) — shifts toward the
 pole; the report flags such near/out-of-range cases as uncertain.
+
+**Posterior correction (family 3556).** The probabilistic products are best read off an example.
+Below is the median-channel posterior for family 3556 (1–100 km, 100 trials, 8×8 basis × 4 seeds;
+built before the empirical noise model, so the numbers — not the interpretation — will shift when
+rerun):
+
+![Family 3556 posterior correction, median channel](docs/images/Fam3556_posterior_correction_median.png)
+
+A possible interpretation, element by element:
+
+- The red **×** is what LEADER actually recovered (here the recovered *median* statistic,
+  `p = 0.45`, `β = 38°`). The colored surface answers: *given that recovery, where is the
+  population's true peak likely to be?* The offset between the × and the probability mass **is**
+  the bias — for this family, LEADER under-reports `p` by ~0.13 and over-reports `β` by ~6°.
+- The credible contours are compact and **single-peaked**, so this dataset supports a definite
+  statement: *the family's true peak lies at `p = 0.58 ± 0.03`, `β = 32° ± 4°` (68%)* — the
+  family is moderately elongated with mid-latitude spins. Had the region been a long diagonal
+  ridge or several islands (see the multimodality note in Step 5b), the honest statement would
+  instead be "several true populations are consistent with this recovery".
+- The **tilt** of the credible ellipse shows the residual p–β degeneracy: slightly rounder shapes
+  with slightly lower spin latitudes mimic slightly more elongated shapes at higher latitudes.
+  The marginals (middle/right panels) integrate over that tilt, which is why quoting the two
+  1-D intervals separately is slightly conservative.
+- What these products can — and cannot — reveal: the posterior constrains the **peak** of the
+  population's `(p, β)` distribution, not its shape or width. The population's *spread* is the
+  job of the Step-6b population distribution, and the per-channel consistency check in
+  `population_report.txt` (peak vs median channel) guards the single-peak assumption behind
+  this figure.
 
 ## Package layout
 

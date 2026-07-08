@@ -45,6 +45,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--nseeds", type=int, default=4, help="realizations per grid point (default 4)")
     p.add_argument("--ndraws", type=int, default=1000, help="synthetic objects per run (default 1000)")
     p.add_argument("--scattering", choices=("ls_lambert", "hapke"), default="ls_lambert")
+    p.add_argument("--noise-model", choices=("empirical", "flat"), default="empirical",
+                   help="synthetic photometric noise: 'empirical' (default) fits the "
+                        "population's own flux-fluxerr relation; 'flat' is the original "
+                        "1%% Gaussian")
     # population/geometry selection (matched tolerances, like the pipeline)
     p.add_argument("--diam-low", type=float, default=3.0)
     p.add_argument("--diam-high", type=float, default=5.0)
@@ -92,7 +96,12 @@ def main(argv=None) -> int:
         raise SystemExit("No .obs geometry files found for the basis.")
     print(f"[{a.pop_id}] basis geometry: {len(geom)} .obs files")
 
-    base_cfg = pc.synthetic_base(geom)
+    noise = None
+    if a.noise_model == "empirical":
+        from pyleader.pipeline import fit_population_noise
+        noise = fit_population_noise(geom, docdir=outdir, label=f"[{a.pop_id}] ")
+
+    base_cfg = pc.synthetic_base(geom, noise_model=noise)
     p_grid = np.linspace(a.p_range[0], a.p_range[1], a.grid_np)
     b_grid = np.deg2rad(np.linspace(a.b_range[0], a.b_range[1], a.grid_nb))
 

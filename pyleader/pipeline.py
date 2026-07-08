@@ -59,6 +59,10 @@ class PopulationConfig:
     bias_map_nseeds: int = 1
     scattering: str = "ls_lambert"
     correction_stat: str = "peak"
+    # synthetic photometric noise: "empirical" (default) fits the population's
+    # own flux-fluxerr relation and applies it per epoch (fainter objects get
+    # larger errors); "flat" keeps the original LEADER release's 1% Gaussian.
+    noise_model: str = "empirical"
 
     # which correction(s) to derive/apply:
     #   "quadratic"  — the deterministic recovered->true surface (bias map)
@@ -98,6 +102,9 @@ class PopulationConfig:
             raise ValueError(
                 f"posterior_stat must be 'peak', 'median' or 'both', "
                 f"got {self.posterior_stat!r}")
+        if self.noise_model not in ("empirical", "flat"):
+            raise ValueError(
+                f"noise_model must be 'empirical' or 'flat', got {self.noise_model!r}")
 
     def analysis_config(self) -> AnalysisConfig:
         return AnalysisConfig(
@@ -117,13 +124,13 @@ class PopulationConfig:
             base_dir=self.base_dir, obsdir=self.obsdir,
         )
 
-    def synthetic_base(self, geometry_files) -> SyntheticConfig:
+    def synthetic_base(self, geometry_files, noise_model=None) -> SyntheticConfig:
         # tolerances matched to the analysis so the correction reflects the same cuts
         return SyntheticConfig(
             Ndraws=self.bias_map_ndraws, scattering=self.scattering,
             phase_angle_limit=self.phase_angle_limit, date_tol=self.date_tol, wanted=self.wanted,
             convert2degrees=self.convert2degrees, geometry_files=list(geometry_files),
-            base_dir=self.base_dir,
+            base_dir=self.base_dir, noise_model=noise_model,
         )
 
 
@@ -154,6 +161,28 @@ def _require_damit_models() -> None:
             "then re-run. Or pass --refresh-models / run_population(..., refresh_models=True) "
             "to download the latest versions now."
         )
+
+
+def fit_population_noise(geom_files, docdir=None, label=""):
+    """Fit + document a population's empirical noise model; ``None`` on failure.
+
+    Writes ``noise_model.json`` and ``noise_model_fit.png`` into ``docdir``
+    (when given) so the fitted flux-fluxerr relation is a recorded artifact.
+    """
+    from .synthetic.noise import fit_noise_model, plot_noise_model
+    try:
+        nm, flux, rel = fit_noise_model(geom_files, return_data=True)
+    except ValueError as e:
+        print(f"NOTE: empirical noise model unavailable ({e}); "
+              "falling back to flat 1% noise.")
+        return None
+    if docdir:
+        os.makedirs(docdir, exist_ok=True)
+        nm.save(os.path.join(docdir, "noise_model.json"))
+        plot_noise_model(nm, flux, rel, os.path.join(docdir, "noise_model_fit.png"))
+    print(f"{label}empirical noise model: {nm.npoints} measurements from "
+          f"{nm.nfiles} objects (fit scatter {nm.scatter_dex:.2f} dex)")
+    return nm
 
 
 def _recovered_peak(analysis_outdir: str, acfg: AnalysisConfig):
@@ -196,7 +225,12 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     os.makedirs(summary_dir, exist_ok=True)
 
     geom = diameter_matched_files(acfg)
-    base_syn = cfg.synthetic_base(geom)
+    noise = None
+    if cfg.noise_model == "empirical":
+        print(f"[{cfg.pop_id}] fitting the photometric-noise model "
+              f"from {len(geom)} .obs files ...")
+        noise = fit_population_noise(geom, docdir=summary_dir, label=f"[{cfg.pop_id}] ")
+    base_syn = cfg.synthetic_base(geom, noise_model=noise)
     result = PopulationResult(pop_id=cfg.pop_id, outdir=outdir, recovered=(rec_p, rec_b))
     coeffs = None
 
@@ -248,15 +282,19 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
             obs = recovered_stat_from_analysis(outdir, st)
             post = posterior_correct(obs[0], obs[1], table)
             post.save(os.path.join(summary_dir, f"posterior_{st}.npz"))
-            plot_posterior(post, os.path.join(summary_dir, f"posterior_correction_{st}.png"))
+            plot_posterior(post, os.path.join(summary_dir, f"posterior_correction_{st}.png"),
+                           stat=st)
             result.posteriors[st] = post
         # headline channel: median if available (continuous observable), else peak
         result.posterior = result.posteriors.get("median",
                                                  next(iter(result.posteriors.values())))
         result.basis_dir = basis_dir
 
+    noise_note = ("empirical flux-fluxerr fit (see summary/noise_model.json)"
+                  if noise is not None else
+                  f"flat {100 * base_syn.noise_level:.0f}% Gaussian")
     _write_report(cfg, outdir, (rec_p, rec_b), result.corrected, coeffs,
-                  getattr(result, "posteriors", None))
+                  getattr(result, "posteriors", None), noise_note=noise_note)
 
     msg = f"[{cfg.pop_id}] recovered (p={rec_p:.3f}, β={rec_b:.1f}°)"
     if result.corrected is not None:
@@ -272,11 +310,14 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     return result
 
 
-def _write_report(cfg, outdir, recovered, corrected=None, coeffs=None, posteriors=None):
+def _write_report(cfg, outdir, recovered, corrected=None, coeffs=None, posteriors=None,
+                  noise_note=None):
     with open(os.path.join(outdir, "summary", "population_report.txt"), "w") as f:
         f.write(f"# Population pipeline report: {cfg.pop_id} ({cfg.population_kind})\n")
         f.write(f"# catalog={cfg.cat} filter={cfg.filterpriority} "
                 f"diam=[{cfg.diam_low},{cfg.diam_high}] km  Ntrials={cfg.Ntrials} Ndraws={cfg.Ndraws}\n")
+        if noise_note:
+            f.write(f"# synthetic photometric noise: {noise_note}\n")
 
         if coeffs is not None and corrected is not None:
             d = coeffs["diagnostics"]

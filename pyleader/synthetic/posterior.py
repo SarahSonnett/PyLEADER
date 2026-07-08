@@ -240,9 +240,16 @@ def posterior_correct(p_rec: float, b_rec_deg: float, table: ForwardTable,
     )
 
 
-def plot_posterior(post: Posterior, out_png: str, *, show: bool = False) -> None:
-    """Three-panel figure: 2-D posterior map + the two marginals."""
+def plot_posterior(post: Posterior, out_png: str, *, stat: str | None = None,
+                   show: bool = False) -> None:
+    """Three-panel figure: 2-D posterior map + the two marginals.
+
+    ``stat`` names the measurement channel (``"peak"`` or ``"median"`` — which
+    recovered statistic was inverted); when given it is stated in the figure
+    title so the artifact is self-describing.
+    """
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
 
     fig, (ax0, ax1, ax2) = plt.subplots(1, 3, figsize=(14, 4.4),
                                         gridspec_kw={"width_ratios": [1.6, 1, 1]})
@@ -254,9 +261,13 @@ def plot_posterior(post: Posterior, out_png: str, *, show: bool = False) -> None
     lev95 = flat[int(np.searchsorted(csum, 0.95 * csum[-1]))]
     pc = ax0.pcolormesh(post.p_grid, post.b_grid, post.density.T,
                         cmap="viridis", shading="auto")
-    ax0.contour(post.p_grid, post.b_grid, post.density.T,
-                levels=sorted([lev95, lev68]), colors=["w", "w"],
-                linestyles=["--", "-"], linewidths=1.2)
+    # levels can coincide when the posterior is extremely concentrated
+    levels = sorted({lev95, lev68})
+    if levels:
+        ax0.contour(post.p_grid, post.b_grid, post.density.T,
+                    levels=levels, colors=["w"] * len(levels),
+                    linestyles=(["--", "-"] if len(levels) == 2 else ["-"]),
+                    linewidths=1.2)
     ax0.plot(*post.observed, "rx", ms=10, mew=2, label="recovered (observed)")
     ax0.plot(post.p_map, post.b_map, "w*", ms=12, label="posterior mode")
     ax0.set_xlabel("true p")
@@ -265,7 +276,14 @@ def plot_posterior(post: Posterior, out_png: str, *, show: bool = False) -> None
     if post.multimodal:
         title += f"  [MULTIMODAL: {post.n_modes} modes]"
     ax0.set_title(title)
-    ax0.legend(fontsize=8, loc="upper left")
+    # legend: include the credible-region contours (proxy artists) and use a
+    # gray box so the white contour lines / mode star stay visible
+    handles, labels = ax0.get_legend_handles_labels()
+    handles += [Line2D([], [], color="w", ls="-", lw=1.2),
+                Line2D([], [], color="w", ls="--", lw=1.2)]
+    labels += ["68% credible region", "95% credible region"]
+    ax0.legend(handles, labels, fontsize=8, loc="upper left",
+               facecolor="0.45", labelcolor="w", framealpha=0.85)
     fig.colorbar(pc, ax=ax0, label="probability")
 
     for ax, grid, axis, med, lo, hi, lbl in (
@@ -280,7 +298,12 @@ def plot_posterior(post: Posterior, out_png: str, *, show: bool = False) -> None
         ax.set_ylabel("marginal posterior")
         ax.legend(fontsize=8)
 
-    fig.tight_layout()
+    if stat is not None:
+        fig.suptitle(f"Posterior correction — {stat} channel "
+                     f"(inverts the recovered {stat} statistic)")
+        fig.tight_layout(rect=(0, 0, 1, 0.92))
+    else:
+        fig.tight_layout()
     fig.savefig(out_png, dpi=300)
     if show:
         plt.show()

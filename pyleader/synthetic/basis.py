@@ -100,15 +100,21 @@ def run_basis(base_cfg: SyntheticConfig, p_grid, b_grid, *,
     b_grid = [float(b) for b in b_grid]
     nb = len(b_grid)
 
-    # manifest (written every invocation; cheap and self-describing)
-    info = dict(p_grid=p_grid, b_grid_rad=b_grid,
-                b_grid_deg=[math.degrees(b) for b in b_grid],
-                nseeds=nseeds, Ndraws=base_cfg.Ndraws, seed_base=seed,
-                scattering=base_cfg.scattering, wanted=base_cfg.wanted,
-                date_tol=base_cfg.date_tol,
-                phase_angle_limit=base_cfg.phase_angle_limit)
-    with open(os.path.join(outdir, "basis_info.json"), "w") as f:
-        json.dump(info, f, indent=2)
+    # photometric-noise description (a basis must be internally consistent:
+    # units generated under different noise models cannot be mixed)
+    nm = getattr(base_cfg, "noise_model", None)
+    noise_desc = (dict(kind="empirical", **nm.to_dict()) if nm is not None
+                  else dict(kind="flat", noise_level=base_cfg.noise_level))
+    info_path = os.path.join(outdir, "basis_info.json")
+    old_noise = None
+    if os.path.exists(info_path):
+        try:
+            with open(info_path) as f:
+                # manifests from before the noise model imply flat 1% noise
+                old_noise = json.load(f).get("noise",
+                                             dict(kind="flat", noise_level=0.01))
+        except (OSError, ValueError):
+            old_noise = None
 
     # all units, in a stable order
     units = []
@@ -122,6 +128,23 @@ def run_basis(base_cfg: SyntheticConfig, p_grid, b_grid, *,
     pending = [u for u in units
                if not os.path.exists(os.path.join(u[5], "synthetic_result.npz"))]
     done_already = total - len(pending)
+
+    if done_already > 0 and old_noise is not None and old_noise != noise_desc:
+        print("WARNING: the existing units in this basis directory were built with a "
+              "different photometric-noise model — resuming would mix inconsistent "
+              "units. Use a fresh --outdir (or delete the old units) when changing "
+              "the noise model.")
+
+    # manifest (written every invocation; cheap and self-describing)
+    info = dict(p_grid=p_grid, b_grid_rad=b_grid,
+                b_grid_deg=[math.degrees(b) for b in b_grid],
+                nseeds=nseeds, Ndraws=base_cfg.Ndraws, seed_base=seed,
+                scattering=base_cfg.scattering, wanted=base_cfg.wanted,
+                date_tol=base_cfg.date_tol,
+                phase_angle_limit=base_cfg.phase_angle_limit,
+                noise=noise_desc)
+    with open(info_path, "w") as f:
+        json.dump(info, f, indent=2)
 
     if task is not None:
         k, n = (int(x) for x in task.split("/"))

@@ -50,7 +50,12 @@ class SyntheticConfig:
     phase_angle_limit: float = 30.0          # synth uses 30 deg (vs. 40 for the real analysis)
 
     # --- brightness model ---
-    noise_level: float = 0.01                # fractional Gaussian noise added to L
+    # Flat fractional Gaussian noise on L (the original LEADER release's 1%).
+    # Superseded when `noise_model` holds a fitted empirical NoiseModel
+    # (pyleader.synthetic.noise): then each epoch's noise follows the
+    # population's own flux-fluxerr relation instead.
+    noise_level: float = 0.01
+    noise_model: Optional[object] = None     # NoiseModel or None (flat noise)
     scattering: str = "ls_lambert"           # "ls_lambert" (default) or "hapke"
     hapke_param: Tuple[float, float, float, float] = (0.63, 0.04, 1.4, -0.4)
     hapke_rough: float = 20.0
