@@ -62,9 +62,10 @@ def unit_dir(basis_dir: str, ip: int, ib: int, seed_idx: int) -> str:
     return os.path.join(basis_dir, f"gp_p{ip:02d}_b{ib:02d}_seed{seed_idx}")
 
 
-def _unit_seed(seed_base: int, ip: int, ib: int, s: int, nb: int, nseeds: int) -> int:
-    """Deterministic per-unit RNG seed, stable under chunking/resume order."""
-    return seed_base + (ip * nb + ib) * nseeds + s
+def _unit_seed(seed_base: int, ip: int, ib: int, s: int, nb: int) -> int:
+    """Deterministic per-unit RNG seed, stable under chunking, resuming, AND
+    later seed top-ups (fixed stride, so adding seeds never reuses a stream)."""
+    return seed_base + (ip * nb + ib) * 1009 + s
 
 
 def _run_unit(args):
@@ -132,7 +133,7 @@ def run_basis(base_cfg: SyntheticConfig, p_grid, b_grid, *,
     if not pending:
         return outdir
 
-    jobs = [(base_cfg, p, b, out, _unit_seed(seed, ip, ib, s, nb, nseeds))
+    jobs = [(base_cfg, p, b, out, _unit_seed(seed, ip, ib, s, nb))
             for (ip, ib, s, p, b, out) in pending]
 
     nproc = nproc or max(1, (os.cpu_count() or 2) - 2)
