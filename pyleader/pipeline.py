@@ -3,8 +3,8 @@
 Given a dynamical-population ID (a Nesvorný collisional family or a background
 MBA population), this chains the whole workflow:
 
-    build .obs  ->  LEADER analysis  ->  synthetic sweep on *this population's*
-    observing geometry  ->  fit a population-specific correction  ->  apply it.
+    build .obs  ->  LEADER analysis  ->  bias map / fixed-peak basis on *this
+    population's* observing geometry  ->  population-specific corrections  ->  apply.
 
 Because the correction is derived from the population's own ``.obs`` cadence and
 geometry, it is bespoke to the dataset — the scientifically appropriate choice.
@@ -27,7 +27,7 @@ from .synthetic.correction import (
     apply_correction, fit_from_csv, plot_correction_fit, save_correction,
 )
 from .synthetic.stats import distribution_stats  # noqa: F401  (re-exported convenience)
-from .synthetic.sweep import run_sweep
+from .synthetic.bias_map import run_bias_map
 
 
 @dataclass
@@ -51,18 +51,18 @@ class PopulationConfig:
     overwrite: bool = True
     neowise_fle: str = "neowise_mainbelt.csv"
 
-    # synthetic sweep (correction). b_peaks are in RADIANS at the config/API
+    # bias map (quadratic correction). b_peaks are in RADIANS at the config/API
     # level (all internal math is radians); the CLIs accept degrees and convert.
     p_peaks: tuple = (0.35, 0.45, 0.55, 0.65, 0.75)
     b_peaks: tuple = tuple(np.deg2rad((10.0, 30.0, 50.0, 75.0)))
-    sweep_ndraws: int = 1000
-    nseeds: int = 1
+    bias_map_ndraws: int = 1000
+    bias_map_nseeds: int = 1
     scattering: str = "ls_lambert"
     correction_stat: str = "peak"
 
     # which correction(s) to derive/apply:
-    #   "quadratic"  — the deterministic recovered->true surface (bias-map sweep)
-    #   "posterior"  — the probabilistic correction with credible intervals (delta basis)
+    #   "quadratic"  — the deterministic recovered->true surface (bias map)
+    #   "posterior"  — the probabilistic correction with credible intervals (fixed-peak basis)
     #   "both"       — run both (default; the report shows them side by side)
     correction_method: str = "both"
     # which recovered statistic the posterior inverts: "peak" (marginal argmax),
@@ -70,7 +70,7 @@ class PopulationConfig:
     # or "both" (default) — running both doubles as a consistency check: for a
     # genuinely single-peaked population the two channels must agree.
     posterior_stat: str = "both"
-    # delta-basis campaign for the posterior correction (auto-built/resumed if absent)
+    # fixed-peak basis campaign for the posterior correction (auto-built/resumed if absent)
     basis_dir: Optional[str] = None            # default: "<analysis outdir>_basis"
     basis_np: int = 8                          # p grid points
     basis_nb: int = 8                          # beta grid points
@@ -81,7 +81,7 @@ class PopulationConfig:
 
     base_dir: str = None
     # Arbitrary .obs directory (bypasses the naming convention). Used for both
-    # building (Step 2) and reading (Step 3), and the sweep geometry follows.
+    # building (Step 2) and reading (Step 3); the bias-map/basis geometry follows.
     obsdir: Optional[str] = None
 
     def __post_init__(self):
@@ -120,7 +120,7 @@ class PopulationConfig:
     def synthetic_base(self, geometry_files) -> SyntheticConfig:
         # tolerances matched to the analysis so the correction reflects the same cuts
         return SyntheticConfig(
-            Ndraws=self.sweep_ndraws, scattering=self.scattering,
+            Ndraws=self.bias_map_ndraws, scattering=self.scattering,
             phase_angle_limit=self.phase_angle_limit, date_tol=self.date_tol, wanted=self.wanted,
             convert2degrees=self.convert2degrees, geometry_files=list(geometry_files),
             base_dir=self.base_dir,
@@ -134,7 +134,7 @@ class PopulationResult:
     recovered: tuple                       # (p, beta_deg) LEADER peak, averaged over trials
     corrected: Optional[tuple] = None      # quadratic correction (p, beta_deg), if run
     correction_path: Optional[str] = None
-    sweep_csv: Optional[str] = None
+    bias_map_csv: Optional[str] = None
     r2: Optional[tuple] = None             # (r2_p, r2_beta) of the quadratic fit
     posterior: object = None               # headline Posterior (median channel if run)
     posteriors: Optional[dict] = None      # {stat: Posterior} for each channel run
@@ -158,7 +158,7 @@ def _require_damit_models() -> None:
 
 def _recovered_peak(analysis_outdir: str, acfg: AnalysisConfig):
     """Average LEADER peak (pmax, betamax_deg) across trials from the summary file."""
-    summary = os.path.join(analysis_outdir, acfg.summary_name)
+    summary = os.path.join(analysis_outdir, "summary", acfg.summary_name)
     pmax, betamax = np.genfromtxt(summary, unpack=True, usecols=(1, 2), dtype=float, skip_header=1)
     return float(np.mean(np.atleast_1d(pmax))), float(np.mean(np.atleast_1d(betamax)))
 
@@ -169,7 +169,7 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
 
     DAMIT shape models are assumed to already exist in the models directory;
     pass ``refresh_models=True`` to re-download the current DAMIT versions of the
-    models listed in ``asteroideja.txt`` before the correction sweep.
+    models listed in ``asteroideja.txt`` before the corrections run.
     """
     acfg = cfg.analysis_config()
 
@@ -192,42 +192,48 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     outdir = run_analysis(acfg, seed=seed)
     rec_p, rec_b = _recovered_peak(outdir, acfg)
 
+    summary_dir = os.path.join(outdir, "summary")
+    os.makedirs(summary_dir, exist_ok=True)
+
     geom = diameter_matched_files(acfg)
     base_syn = cfg.synthetic_base(geom)
     result = PopulationResult(pop_id=cfg.pop_id, outdir=outdir, recovered=(rec_p, rec_b))
     coeffs = None
 
-    # 3a–5a. quadratic correction: bias-map sweep -> fit -> apply
+    # 3a–5a. quadratic correction: bias map -> fit -> apply
     if cfg.correction_method in ("quadratic", "both"):
         print(f"[{cfg.pop_id}] determining the bias map from {len(geom)} population geometries ...")
-        sweep_dir = os.path.join(outdir, "correction_sweep")
-        sweep_csv = run_sweep(base_syn, cfg.p_peaks, cfg.b_peaks,
-                              nseeds=cfg.nseeds, seed=(seed or 0), outdir=sweep_dir)
+        # simulations live OUTSIDE the analysis dir (re-running the analysis wipes it)
+        biasmap_dir = f"{outdir}_biasmap"
+        biasmap_csv = run_bias_map(base_syn, cfg.p_peaks, cfg.b_peaks,
+                                   nseeds=cfg.bias_map_nseeds, seed=(seed or 0),
+                                   outdir=biasmap_dir)
 
-        # surface the recovered-vs-assigned summary figure at the top of the output dir
-        summary_src = os.path.join(sweep_dir, "sweep_summary.png")
+        # surface the recovered-vs-assigned figure in the summary directory
+        summary_src = os.path.join(biasmap_dir, "bias_map_summary.png")
         if os.path.exists(summary_src):
-            shutil.copy(summary_src, os.path.join(outdir, "sweep_summary.png"))
+            shutil.copy(summary_src, os.path.join(summary_dir, "bias_map_summary.png"))
 
-        coeffs = fit_from_csv(sweep_csv, stat=cfg.correction_stat)
-        corr_path = os.path.join(outdir, "correction_function.json")
+        coeffs = fit_from_csv(biasmap_csv, stat=cfg.correction_stat)
+        corr_path = os.path.join(summary_dir, "quadratic_correction.json")
         save_correction(coeffs, corr_path)
-        plot_correction_fit(sweep_csv, coeffs, os.path.join(outdir, "correction_fit.png"))
+        plot_correction_fit(biasmap_csv, coeffs,
+                            os.path.join(summary_dir, "quadratic_correction_fit.png"))
 
         cor_p, cor_b = apply_correction([rec_p], [rec_b], coeffs)
         result.corrected = (float(cor_p[0]), float(cor_b[0]))
         result.correction_path = corr_path
-        result.sweep_csv = sweep_csv
+        result.bias_map_csv = biasmap_csv
         result.r2 = (coeffs["diagnostics"]["r2_p"], coeffs["diagnostics"]["r2_b"])
 
-    # 3b–5b. posterior correction: delta basis -> forward table(s) -> posterior(s)
+    # 3b–5b. posterior correction: fixed-peak basis -> forward table(s) -> posterior(s)
     if cfg.correction_method in ("posterior", "both"):
         from .synthetic.basis import run_basis
         from .synthetic.posterior import (build_forward_table, posterior_correct,
                                           plot_posterior, recovered_stat_from_analysis)
 
         basis_dir = cfg.basis_dir or f"{outdir}_basis"
-        print(f"[{cfg.pop_id}] posterior correction: delta basis at {basis_dir}")
+        print(f"[{cfg.pop_id}] posterior correction: fixed-peak basis at {basis_dir}")
         p_grid = np.linspace(cfg.basis_p_range[0], cfg.basis_p_range[1], cfg.basis_np)
         b_grid = np.deg2rad(np.linspace(cfg.basis_b_range_deg[0],
                                         cfg.basis_b_range_deg[1], cfg.basis_nb))
@@ -241,8 +247,8 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
             table = build_forward_table(basis_dir, stat=st)
             obs = recovered_stat_from_analysis(outdir, st)
             post = posterior_correct(obs[0], obs[1], table)
-            post.save(os.path.join(outdir, f"posterior_{st}.npz"))
-            plot_posterior(post, os.path.join(outdir, f"posterior_correction_{st}.png"))
+            post.save(os.path.join(summary_dir, f"posterior_{st}.npz"))
+            plot_posterior(post, os.path.join(summary_dir, f"posterior_correction_{st}.png"))
             result.posteriors[st] = post
         # headline channel: median if available (continuous observable), else peak
         result.posterior = result.posteriors.get("median",
@@ -267,7 +273,7 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
 
 
 def _write_report(cfg, outdir, recovered, corrected=None, coeffs=None, posteriors=None):
-    with open(os.path.join(outdir, "population_report.txt"), "w") as f:
+    with open(os.path.join(outdir, "summary", "population_report.txt"), "w") as f:
         f.write(f"# Population pipeline report: {cfg.pop_id} ({cfg.population_kind})\n")
         f.write(f"# catalog={cfg.cat} filter={cfg.filterpriority} "
                 f"diam=[{cfg.diam_low},{cfg.diam_high}] km  Ntrials={cfg.Ntrials} Ndraws={cfg.Ndraws}\n")
@@ -294,8 +300,8 @@ def _write_report(cfg, outdir, recovered, corrected=None, coeffs=None, posterior
         if posteriors:
             for st, po in posteriors.items():
                 f.write(f"\n== posterior correction, {st} channel "
-                        "(probabilistic; per-population delta basis) ==\n")
-                f.write("quantity   observed       median  68% interval        95% interval        MAP\n")
+                        "(probabilistic; per-population fixed-peak basis) ==\n")
+                f.write("quantity   observed       median  68% interval        95% interval        mode\n")
                 f.write("p          %9.4f   %9.4f  [%6.4f, %6.4f]  [%6.4f, %6.4f]  %6.4f\n"
                         % (po.observed[0], po.p_median, po.p_lo68, po.p_hi68,
                            po.p_lo95, po.p_hi95, po.p_map))
@@ -328,4 +334,5 @@ def _write_report(cfg, outdir, recovered, corrected=None, coeffs=None, posterior
                     f.write(f"\n# WARNING: peak- and median-channel posteriors DISAGREE in "
                             f"{which} (68% intervals do not overlap) — the population may be "
                             "skewed or multimodal rather than single-peaked; inspect the "
-                            "posterior maps and the unfolded f(p, beta).\n")
+                            "posterior maps and the population distribution "
+                            "(pyleader-unfold).\n")

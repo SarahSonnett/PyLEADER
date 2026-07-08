@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""Plot a synthetic-sweep summary from an existing sweep_stats.csv.
+"""Plot a bias-map summary from an existing bias_map_stats.csv.
 
-Produces the 2-panel recovered-vs-assigned figure without re-running the sweep.
+Produces the 2-panel recovered-vs-assigned figure without re-running the bias map.
 
 Example::
 
-    python scripts/plot_bias_map.py ~/bias_map/sweep_stats.csv
+    python scripts/plot_bias_map.py ~/bias_map/bias_map_stats.csv
 """
 
 from __future__ import annotations
@@ -16,18 +16,18 @@ import sys
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
-from pyleader.synthetic.sweep_plots import plot_sweep  # noqa: E402
+from pyleader.synthetic.bias_map_plots import plot_bias_map  # noqa: E402
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description="Plot a synthetic-sweep summary from sweep_stats.csv.")
-    p.add_argument("csv", help="path to sweep_stats.csv")
-    p.add_argument("-o", "--out", default=None, help="output PNG (default: sweep_summary.png next to the CSV)")
+    p = argparse.ArgumentParser(description="Plot a bias-map summary from bias_map_stats.csv.")
+    p.add_argument("csv", help="path to bias_map_stats.csv")
+    p.add_argument("-o", "--out", default=None, help="output PNG (default: bias_map_summary.png next to the CSV)")
     p.add_argument("--show", action="store_true")
     args = p.parse_args(argv)
 
-    out = args.out or os.path.join(os.path.dirname(os.path.abspath(args.csv)), "sweep_summary.png")
-    plot_sweep(args.csv, out, show=args.show)
+    out = args.out or os.path.join(os.path.dirname(os.path.abspath(args.csv)), "bias_map_summary.png")
+    plot_bias_map(args.csv, out, show=args.show)
     print(f"Wrote {out}")
     return 0
 

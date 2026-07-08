@@ -2,7 +2,7 @@
 
 The quadratic correction (Step 5) maps a recovered peak to a single corrected
 value — inadequate where the p–β degeneracy makes the recovered→true mapping
-many-to-one. Here we instead treat the delta-basis runs as a sampled **forward
+many-to-one. Here we instead treat the fixed-peak basis runs as a sampled **forward
 model** — at each assigned grid point we know the mean and scatter of what
 LEADER recovers — and invert it with Bayes' rule:
 
@@ -258,7 +258,7 @@ def plot_posterior(post: Posterior, out_png: str, *, show: bool = False) -> None
                 levels=sorted([lev95, lev68]), colors=["w", "w"],
                 linestyles=["--", "-"], linewidths=1.2)
     ax0.plot(*post.observed, "rx", ms=10, mew=2, label="recovered (observed)")
-    ax0.plot(post.p_map, post.b_map, "w*", ms=12, label="posterior MAP")
+    ax0.plot(post.p_map, post.b_map, "w*", ms=12, label="posterior mode")
     ax0.set_xlabel("true p")
     ax0.set_ylabel("true β (deg)")
     title = "Posterior over true (p, β)"

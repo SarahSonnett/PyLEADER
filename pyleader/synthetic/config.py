@@ -94,11 +94,12 @@ class SyntheticConfig:
             )
 
     @classmethod
-    def delta_preset(cls, p_peak: float, b_peak: float, **kwargs) -> "SyntheticConfig":
-        """A near-delta synthetic population at one assigned ``(p, beta)``.
+    def fixed_peak_preset(cls, p_peak: float, b_peak: float, **kwargs) -> "SyntheticConfig":
+        """A fixed-peak synthetic population: every object at one assigned ``(p, beta)``.
 
-        Used for the correction basis runs: essentially all objects sit at the
-        assigned peak (no uniform-beta background, tight tolerances), and the
+        (A near-delta distribution, in statistical terms.) Used for the correction
+        basis runs: essentially all objects sit at the assigned peak (no
+        uniform-beta background, tight tolerances), and the
         inversion grid jitter is disabled so all runs share the canonical
         recovered grid. ``b_peak`` is in radians (as at the API level).
         """

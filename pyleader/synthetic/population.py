@@ -119,7 +119,7 @@ def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool =
 
     ``make_plots=False`` skips the per-run figures (the stats file and ``.npz``
     are still written) and ``verbose=False`` silences the per-run terminal
-    output — both are used by the bias-map sweep, which shows a single
+    output — both are used by the bias map, which shows a single
     progress bar instead.
     """
     if seed is not None:

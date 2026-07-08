@@ -47,16 +47,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--p-peaks", type=float, nargs="+", default=list(d.p_peaks))
     p.add_argument("--b-peaks", type=float, nargs="+", default=[10.0, 30.0, 50.0, 75.0],
                    help="assigned beta peaks in DEGREES (0 < beta < 90)")
-    p.add_argument("--sweep-ndraws", type=int, default=d.sweep_ndraws)
-    p.add_argument("--nseeds", type=int, default=d.nseeds)
+    p.add_argument("--bias-map-ndraws", type=int, default=d.bias_map_ndraws,
+                   help="synthetic objects per bias-map grid point")
+    p.add_argument("--bias-map-nseeds", type=int, default=d.bias_map_nseeds,
+                   help="seeds per bias-map grid point")
     p.add_argument("--scattering", choices=("ls_lambert", "hapke"), default=d.scattering)
     p.add_argument("--correction-stat", choices=("peak", "mean", "median"), default=d.correction_stat)
     p.add_argument("--correction-method", choices=("quadratic", "posterior", "both"),
                    default=d.correction_method,
-                   help="quadratic (bias-map fit), posterior (credible intervals from a delta "
-                        "basis), or both (default)")
+                   help="quadratic (bias-map fit), posterior (credible intervals from a "
+                        "fixed-peak basis), or both (default)")
     p.add_argument("--basis-dir", default=None,
-                   help="delta-basis directory (default '<analysis outdir>_basis'; auto-built/"
+                   help="fixed-peak basis directory (default '<analysis outdir>_basis'; auto-built/"
                         "resumed when missing)")
     p.add_argument("--basis-nseeds", type=int, default=d.basis_nseeds,
                    help="realizations per basis grid point (default 4)")
@@ -68,7 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--base-dir", default=None)
     p.add_argument("--obsdir", default=None,
                    help="read/write .obs from this exact directory (bypasses the naming convention); "
-                        "the correction sweep's geometry follows it")
+                        "the bias-map/basis geometry follows it")
     p.add_argument("--build", action="store_true", help="query NEOWISE and write .obs first")
     p.add_argument("--refresh-models", action="store_true",
                    help="re-download the latest DAMIT versions of the asteroideja.txt models first")
@@ -85,7 +87,8 @@ def main(argv=None) -> int:
         date_tol=a.date_tol, wanted=a.wanted, p_peaks=tuple(a.p_peaks),
         # CLI takes beta in degrees; the config/API level uses radians.
         b_peaks=tuple(math.radians(b) for b in a.b_peaks),
-        sweep_ndraws=a.sweep_ndraws, nseeds=a.nseeds, scattering=a.scattering,
+        bias_map_ndraws=a.bias_map_ndraws, bias_map_nseeds=a.bias_map_nseeds,
+        scattering=a.scattering,
         correction_stat=a.correction_stat, correction_method=a.correction_method,
         basis_dir=a.basis_dir, basis_nseeds=a.basis_nseeds, basis_nproc=a.basis_nproc,
         posterior_stat=a.posterior_stat, base_dir=a.base_dir, obsdir=a.obsdir,

@@ -1,18 +1,18 @@
 #!/usr/bin/env python
-"""Fit and record a bias-correction function from a synthetic sweep.
+"""Fit and record a bias-correction function from a bias map.
 
-Reads a ``sweep_stats.csv`` (from ``scripts/bias_map.py``), fits the
+Reads a ``bias_map_stats.csv`` (from ``scripts/bias_map.py``), fits the
 recovered->true correction surfaces for p and beta, writes the coefficients to
-``correction_function.json``, and saves a predicted-vs-actual diagnostic plot.
+``quadratic_correction.json``, and saves a predicted-vs-actual diagnostic plot.
 
 Apply the result to real LEADER output with::
 
     from pyleader.synthetic.correction import load_correction, apply_correction
-    p_true, beta_true = apply_correction(p_recovered, beta_recovered_deg, load_correction("correction_function.json"))
+    p_true, beta_true = apply_correction(p_recovered, beta_recovered_deg, load_correction("quadratic_correction.json"))
 
 Example::
 
-    python scripts/fit_correction.py ~/synthetic_sweep/sweep_stats.csv
+    python scripts/fit_correction.py ~/bias_map/bias_map_stats.csv
 """
 
 from __future__ import annotations
@@ -28,16 +28,16 @@ from pyleader.synthetic.correction import (  # noqa: E402
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description="Fit a bias-correction function from a sweep CSV.")
-    p.add_argument("csv", help="path to sweep_stats.csv")
+    p = argparse.ArgumentParser(description="Fit the quadratic correction from a bias-map CSV.")
+    p.add_argument("csv", help="path to bias_map_stats.csv")
     p.add_argument("--stat", default="mean", choices=("mean", "median", "peak"),
                    help="statistic to correct (peak matches LEADER's pmax/betamax)")
     p.add_argument("-o", "--out", default=None, help="output JSON (default next to CSV)")
     args = p.parse_args(argv)
 
     outdir = os.path.dirname(os.path.abspath(args.csv))
-    out_json = args.out or os.path.join(outdir, "correction_function.json")
-    out_png = os.path.join(outdir, "correction_fit.png")
+    out_json = args.out or os.path.join(outdir, "quadratic_correction.json")
+    out_png = os.path.join(outdir, "quadratic_correction_fit.png")
 
     coeffs = fit_from_csv(args.csv, stat=args.stat)
     save_correction(coeffs, out_json)

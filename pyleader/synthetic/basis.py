@@ -1,7 +1,8 @@
-"""Delta-basis runs: the shared forward-model sampler for the probabilistic
+"""Fixed-peak basis runs: the shared forward-model sampler for the probabilistic
 (posterior) correction and the response-matrix unfolding.
 
-One *basis* is a grid of near-delta synthetic populations — each concentrated
+One *basis* is a grid of fixed-peak synthetic populations (near-delta
+distributions, in statistical terms) — each concentrated
 at one assigned ``(p_peak, b_peak)`` — observed at the target population's own
 geometry and pushed through the full LEADER pipeline, with ``nseeds``
 independent realizations per grid point. All runs share the canonical
@@ -69,7 +70,7 @@ def _unit_seed(seed_base: int, ip: int, ib: int, s: int, nb: int) -> int:
 
 
 def _run_unit(args):
-    """Pool worker: one delta run. Top-level function so it pickles under spawn."""
+    """Pool worker: one fixed-peak run. Top-level function so it pickles under spawn."""
     base_cfg, p_peak, b_peak, out, seed = args
     os.environ.setdefault("MPLBACKEND", "Agg")
     from .population import run_synthetic  # import inside worker (spawn-safe)
@@ -86,10 +87,10 @@ def _run_unit(args):
 def run_basis(base_cfg: SyntheticConfig, p_grid, b_grid, *,
               nseeds: int = 4, seed: int = 0, outdir: str,
               nproc: int | None = None, task: str | None = None) -> str:
-    """Run (or resume) the delta-basis campaign; returns ``outdir``.
+    """Run (or resume) the fixed-peak basis campaign; returns ``outdir``.
 
     ``base_cfg`` supplies geometry (``geometry_files``/``geometry_dir``),
-    ``Ndraws``, scattering, and tolerances; the delta-preset fields and
+    ``Ndraws``, scattering, and tolerances; the fixed-peak preset fields and
     ``grid_jitter=False`` are applied per unit. ``b_grid`` is in radians.
     ``nproc`` defaults to (cpu_count - 2); ``task="k/N"`` runs the k-th of N
     contiguous chunks of the remaining units (0-based k).
@@ -128,7 +129,7 @@ def run_basis(base_cfg: SyntheticConfig, p_grid, b_grid, *,
         pending = [pending[i] for i in chunks[k]]
         print(f"Basis chunk {k}/{n}: {len(pending)} of the remaining units")
 
-    print(f"Delta basis: {len(p_grid)}x{nb} grid x {nseeds} seed(s) = {total} units "
+    print(f"Fixed-peak basis: {len(p_grid)}x{nb} grid x {nseeds} seed(s) = {total} units "
           f"({done_already} already done, {len(pending)} to run)")
     if not pending:
         return outdir

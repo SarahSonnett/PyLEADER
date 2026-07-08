@@ -1,4 +1,4 @@
-"""Run a synthetic sweep over a (p_peak, b_peak) grid and tabulate the stats.
+"""Determine the bias map: synthetic runs over a (p_peak, b_peak) grid.
 
 Shared by ``scripts/bias_map.py`` and the per-population pipeline.
 """
@@ -15,7 +15,7 @@ import numpy as np
 from .config import SyntheticConfig
 from .population import run_synthetic
 from .stats import stats_row
-from .sweep_plots import plot_sweep
+from .bias_map_plots import plot_bias_map
 
 _STAT_COLS = [f"{q}_{kind}_{stat}"
               for q in ("p", "beta")
@@ -25,15 +25,15 @@ COLUMNS = (["trial", "seed", "p_peak", "b_peak_rad", "b_peak_deg",
             "p_recovered_peak", "beta_recovered_peak_deg", "relerr"] + _STAT_COLS)
 
 
-def run_sweep(base_cfg: SyntheticConfig, p_peaks, b_peaks, *,
+def run_bias_map(base_cfg: SyntheticConfig, p_peaks, b_peaks, *,
               nseeds: int = 1, seed: int = 0, outdir: str) -> str:
-    """Run the grid × seeds sweep; write ``sweep_stats.csv`` + ``sweep_summary.png``.
+    """Run the grid × seeds bias map; write ``bias_map_stats.csv`` + ``bias_map_summary.png``.
 
     ``base_cfg`` supplies everything except ``p_peak``/``b_peak``/``outdir`` (which
     vary per run) — including the geometry source (``geometry_dir`` or
     ``geometry_files``), ``Ndraws``, scattering, and the matched tolerances.
     The terminal shows a single self-updating progress bar over all runs.
-    Returns the path to ``sweep_stats.csv``.
+    Returns the path to ``bias_map_stats.csv``.
     """
     os.makedirs(outdir, exist_ok=True)
     grid = list(itertools.product(p_peaks, b_peaks))
@@ -67,12 +67,12 @@ def run_sweep(base_cfg: SyntheticConfig, p_peaks, b_peaks, *,
             rows.append(row)
 
     print()  # end the progress-bar line
-    csv_path = os.path.join(outdir, "sweep_stats.csv")
+    csv_path = os.path.join(outdir, "bias_map_stats.csv")
     with open(csv_path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS)
         w.writeheader()
         for row in rows:
             w.writerow({k: row.get(k) for k in COLUMNS})
 
-    plot_sweep(csv_path, os.path.join(outdir, "sweep_summary.png"))
+    plot_bias_map(csv_path, os.path.join(outdir, "bias_map_summary.png"))
     return csv_path

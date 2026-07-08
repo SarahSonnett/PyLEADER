@@ -1,6 +1,6 @@
-"""Summarize a synthetic sweep: recovered vs. assigned as a 2-panel figure.
+"""Summarize a bias map: recovered vs. assigned as a 2-panel figure.
 
-Reads a ``sweep_stats.csv`` (from ``scripts/bias_map.py``) and plots, per
+Reads a ``bias_map_stats.csv`` (from ``scripts/bias_map.py``) and plots, per
 trial, the recovered vs. assigned distribution means as a function of the two
 assigned input parameters:
 
@@ -53,8 +53,8 @@ def _agg(rows, key_field, series_field, y_recovered, y_assigned):
     return out, x_vals
 
 
-def plot_sweep(csv_path: str, out_png: str | None = None, *, show: bool = False):
-    """Render the 2-panel recovered-vs-assigned summary for a sweep CSV."""
+def plot_bias_map(csv_path: str, out_png: str | None = None, *, show: bool = False):
+    """Render the 2-panel recovered-vs-assigned summary for a bias-map CSV."""
     rows = _load(csv_path)
     nseeds = len({r["seed"] for r in rows}) if "seed" in rows[0] else 1
 
@@ -85,7 +85,7 @@ def plot_sweep(csv_path: str, out_png: str | None = None, *, show: bool = False)
     axb.grid(True, alpha=0.3)
     axb.legend(fontsize=8)
 
-    fig.suptitle(f"Synthetic sweep summary (error bars = ±1σ over {nseeds} seed"
+    fig.suptitle(f"Bias map summary (error bars = ±1σ over {nseeds} seed"
                  f"{'s' if nseeds != 1 else ''})")
     fig.tight_layout()
     if out_png:

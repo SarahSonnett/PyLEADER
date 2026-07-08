@@ -175,7 +175,7 @@ def plot_alltrials(dist: np.ndarray, ttle: str, pltname: str, outdir: str, *, sh
 
 def _population_counts(outdir: str, cfg: AnalysisConfig):
     """Median (N_obj, AvgPointsPerObj) across trials, from the summary file."""
-    summary = f"{outdir}/{cfg.summary_name}"
+    summary = f"{outdir}/summary/{cfg.summary_name}"
     try:
         nobj, npoints = np.genfromtxt(summary, unpack=True, usecols=(4, 5), dtype=float, skip_header=1)
         return float(np.median(np.atleast_1d(nobj))), float(np.median(np.atleast_1d(npoints)))
@@ -228,12 +228,12 @@ def plot_population_df(outdir: str, cfg: AnalysisConfig, *, show: bool = False) 
         plt.xlabel(xlabel)
         plt.ylabel("Density function")
         plt.tight_layout()
-        plt.savefig(f"{outdir}/{png}.png", dpi=300)
+        plt.savefig(f"{outdir}/summary/{png}.png", dpi=300)
         if show:
             plt.show()
         plt.close()
 
-        with open(f"{outdir}/{txt}", "w+") as outfile:
+        with open(f"{outdir}/summary/{txt}", "w+") as outfile:
             outfile.write(f"{int(nobj)} {round(npoints, 2)}\n")
             for i in range(len(med)):
                 outfile.write("%1.2f  %1.3f  %1.3f\n" % (med[i], med_df[i], err[i]))

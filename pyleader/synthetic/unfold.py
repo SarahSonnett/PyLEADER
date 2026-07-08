@@ -1,7 +1,7 @@
 """Response-matrix unfolding: correct the full f(p, β) distribution.
 
 The posterior correction (Step 5b) treats the population as a single peak. The
-unfolding goes further: the delta-basis runs define a **response matrix**
+unfolding goes further: the fixed-peak basis runs define a **response matrix**
 ``R[i, j]`` — the recovered joint solution (bin *i* of the canonical 20×29
 grid) produced by a population concentrated at true grid point *j*. Because the
 amplitude CDF of a mixture is the mixture of the CDFs, the recovered solution
@@ -29,7 +29,7 @@ from .basis import CANON_BETA, CANON_P, basis_units, rebin_to_canonical
 
 @dataclass
 class Response:
-    """Response matrix built from a delta basis."""
+    """Response matrix built from a fixed-peak basis."""
 
     p_grid: np.ndarray        # (Np,) true-grid p values
     b_grid: np.ndarray        # (Nb,) true-grid beta values, DEGREES
@@ -245,7 +245,8 @@ def plot_unfolded(res: UnfoldResult, out_png: str, *, truth=None, show: bool = F
         for (pt, bt, wt) in truth:
             ax0.plot(pt, bt, "r*", ms=14 * max(wt, 0.4), mec="w")
     ax0.set_xlabel("true p"); ax0.set_ylabel("true β (deg)")
-    ax0.set_title(f"Unfolded f(p, β)   (relerr={res.relerr:.3f}, α={res.alpha:.3g})")
+    ax0.set_title("Estimated true population distribution f(p, β)\n"
+                  f"(unfolded; relerr={res.relerr:.3f}, α={res.alpha:.3g})")
     fig.colorbar(pc, ax=ax0, label="probability")
 
     for ax, axis, grid, lbl in ((ax1, 1, res.p_grid, "p"),

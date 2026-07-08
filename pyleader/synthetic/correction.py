@@ -1,4 +1,4 @@
-"""Fit and apply a bias-correction function from a synthetic sweep.
+"""Fit and apply the quadratic bias correction from a bias map.
 
 The synthetic validation shows that LEADER's recovered (p, beta) distributions
 are biased relative to the assigned truth. This module fits a correction that
@@ -11,7 +11,7 @@ Each quantity is modeled as a 2D quadratic surface in (p_rec, beta_rec):
 
     q_true = c0 + c1 p + c2 b + c3 p^2 + c4 p b + c5 b^2
 
-fit by least squares to the per-(grid-point, seed) means in a sweep CSV. Beta is
+fit by least squares to the per-(grid-point, seed) points of a bias-map CSV. Beta is
 in degrees throughout.
 """
 
@@ -26,8 +26,8 @@ import numpy as np
 
 TERMS = ["1", "p", "b", "p^2", "p*b", "b^2"]
 
-# Canonical correction shipped with the package (fit from a 20x3 synthetic
-# sweep; regenerate with scripts/fit_correction.py on your own sweep).
+# Canonical correction shipped with the package (fit from a 20x3 bias map;
+# regenerate with scripts/fit_correction.py on your own bias map).
 _DEFAULT_CORRECTION = os.path.join(os.path.dirname(__file__), "data", "correction_function.json")
 
 
@@ -42,7 +42,7 @@ def _n_terms(n_points: int) -> int:
     """Polynomial terms to fit given the sample count (avoid overfitting).
 
     Quadratic (6) needs a comfortable margin; drop to linear (3) or a constant
-    offset (1) for small sweeps so the correction never interpolates noise.
+    offset (1) for small bias maps so the correction never interpolates noise.
     """
     if n_points >= 12:
         return 6
@@ -114,7 +114,7 @@ def apply_correction(p_rec, b_rec, coeffs: dict):
 
 
 def fit_from_csv(csv_path: str, *, stat: str = "mean") -> dict:
-    """Fit a correction from a ``sweep_stats.csv`` using the chosen statistic.
+    """Fit a correction from a ``bias_map_stats.csv`` using the chosen statistic.
 
     ``stat`` is ``"mean"`` or ``"median"`` (distribution statistics), or
     ``"peak"`` — the distribution peak (recovered peak vs the assigned peak),
@@ -148,7 +148,7 @@ def load_correction(path: str) -> dict:
 def default_correction() -> dict:
     """Load the canonical correction shipped with the package.
 
-    Regenerate it for your own sweep with ``scripts/fit_correction.py`` and pass
+    Regenerate it for your own bias map with ``scripts/fit_correction.py`` and pass
     the resulting JSON to :func:`load_correction` instead.
     """
     return load_correction(_DEFAULT_CORRECTION)
@@ -187,7 +187,7 @@ def plot_correction_fit(csv_path: str, coeffs: dict, out_png: str) -> None:
         ax.set_title(f"{lbl}: corrected vs true  (R²={r2:.3f})")
         ax.grid(True, alpha=0.3)
         ax.legend()
-    fig.suptitle(f"Correction fit ({stat}-based, recovered→true)")
+    fig.suptitle(f"Quadratic correction fit ({stat}-based, recovered→true)")
     fig.tight_layout()
     fig.savefig(out_png, dpi=300)
     plt.close(fig)

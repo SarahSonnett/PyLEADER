@@ -2,7 +2,7 @@
 """CLI to compare two recovered (p, beta) distributions.
 
 Replaces ``ast_comparison_WISE.m`` + ``KS_comparison.m``. Takes two
-``synthetic_result.npz`` files written by ``scripts/spot_check.py`` / the bias-map sweep (or any analysis
+``synthetic_result.npz`` files written by ``scripts/spot_check.py`` / the bias map (or any analysis
 that saved recovered marginals in that format) and reports the L1/L2/L-inf
 distances between their marginal CDFs of ``p`` and ``beta``, with plots.
 

@@ -86,7 +86,9 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
         shutil.rmtree(outdir)
         os.mkdir(outdir)
 
-    summary_path = f"{outdir}/{cfg.summary_name}"
+    summary_dir = f"{outdir}/summary"
+    os.makedirs(summary_dir, exist_ok=True)
+    summary_path = f"{summary_dir}/{cfg.summary_name}"
     if cfg.overwrite:
         wfile = open(summary_path, "w+")
         wfile.write(
@@ -99,7 +101,7 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
     Ndraws = cfg.Ndraws
 
     # Full run log in the output directory; the terminal shows a progress bar only.
-    log = open(f"{outdir}/analysis.log", "w")
+    log = open(f"{summary_dir}/analysis.log", "w")
     log.write(f"# LEADER analysis — {famid} ({cfg.population_kind})\n")
     log.write(f"# started {datetime.datetime.now().isoformat(timespec='seconds')}\n")
     log.write(f"# cat={cfg.cat} filter={cfg.filterpriority} "
@@ -208,9 +210,9 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
         summary_path, unpack=True, dtype=float, usecols=(0, 1, 2, 3)
     )
     plot_alltrials(betamax_all, "Peak of " + r"$\beta$" + " distribution",
-                   f"Summary_betamax_Famid{famid}_{cfg.diam_tag}", outdir, show=show)
+                   f"Summary_betamax_Famid{famid}_{cfg.diam_tag}", summary_dir, show=show)
     plot_alltrials(pmax_all, "Peak of p distribution",
-                   f"Summary_pmax_Famid{famid}_{cfg.diam_tag}", outdir, show=show)
+                   f"Summary_pmax_Famid{famid}_{cfg.diam_tag}", summary_dir, show=show)
 
     # population-level marginal DFs of p and beta (DF_p_all/DF_b_all .png + .txt)
     plot_population_df(outdir, cfg, show=show)

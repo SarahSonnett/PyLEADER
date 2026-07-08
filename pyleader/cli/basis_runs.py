@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Run the delta-basis campaign for a population's probabilistic correction.
+"""Run the fixed-peak basis campaign for a population's probabilistic correction.
 
-Builds near-delta synthetic populations on an assigned ``(p_peak, b_peak)``
+Builds fixed-peak synthetic populations on an assigned ``(p_peak, b_peak)``
 grid, observed at the population's own geometry — the forward-model samples the
 posterior correction (and the response-matrix unfolding) are built from.
 Resumable: completed grid points are skipped, so an interrupted campaign can
@@ -34,7 +34,7 @@ from pyleader.synthetic.basis import run_basis  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Run the delta-basis campaign for a population.")
+    p = argparse.ArgumentParser(description="Run the fixed-peak basis campaign for a population.")
     p.add_argument("pop_id", help="family id (e.g. 1128), background id (BG_*), or a label when using --geometry-dir")
     p.add_argument("--grid-np", type=int, default=8, help="number of p grid points (default 8)")
     p.add_argument("--grid-nb", type=int, default=8, help="number of beta grid points (default 8)")
@@ -72,7 +72,7 @@ def main(argv=None) -> int:
         pop_id=a.pop_id, population_kind=a.population_kind,
         diam_low=a.diam_low, diam_high=a.diam_high,
         phase_angle_limit=a.phase_angle_limit, date_tol=a.date_tol, wanted=a.wanted,
-        sweep_ndraws=a.ndraws, scattering=a.scattering,
+        bias_map_ndraws=a.ndraws, scattering=a.scattering,
         base_dir=a.base_dir, obsdir=a.obsdir,
     )
 
