@@ -165,9 +165,11 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
 
         result = leader_invert(Asort, CDFA, verbose=False)
 
-        # persist the joint solution (radians, pre-conversion) for unfolding
+        # persist the joint solution (radians, pre-conversion) and the pooled
+        # amplitude sample for the posterior / unfolding steps (Asort also
+        # feeds the CDF-space response unfolding)
         np.savez(f"{trialdir}/W_trial{trial + 1}.npz",
-                 W=result.W, P=result.P, BETA=result.BETA)
+                 W=result.W, P=result.P, BETA=result.BETA, Asort=Asort)
 
         Nobjs = len(set(Objects_drawn))
 

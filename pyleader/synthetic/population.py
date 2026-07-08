@@ -39,6 +39,7 @@ class SyntheticResult:
     Bmargin: np.ndarray         # recovered marginal DF of beta
     stats: dict                 # min/max/mean/median, assigned vs recovered, p & beta(deg)
     outdir: str
+    A: np.ndarray = None        # pooled sorted amplitudes (CDF-space unfolding)
 
     def save(self, path: str) -> None:
         np.savez(
@@ -47,6 +48,7 @@ class SyntheticResult:
             p_true=self.p_true, beta_true=self.beta_true,
             P=self.P, BETA=self.BETA, Pmargin=self.Pmargin, Bmargin=self.Bmargin,
             W=self.inversion.W,  # full joint occupation numbers (for posterior/unfolding)
+            A=(self.A if self.A is not None else np.empty(0)),
         )
 
     @staticmethod
@@ -193,6 +195,7 @@ def run_synthetic(cfg: SyntheticConfig, *, seed: int | None = None, show: bool =
         p_true=p_true, beta_true=beta_true,
         inversion=result, P=result.P, BETA=result.BETA,
         Pmargin=Pmargin, Bmargin=Bmargin, stats=stats, outdir=outdir,
+        A=Asort,
     )
     res.save(os.path.join(outdir, "synthetic_result.npz"))
 

@@ -456,15 +456,27 @@ distribution is the product that can actually reveal such structure.
 pyleader-unfold <analysis_outdir> --basis <analysis_outdir>_basis
 ```
 
-treats the basis as a **response matrix** and inverts the analysis's mean joint solution into an
-estimate of the *true* `f(p, β)` on the basis grid, with 16–84% bands from a perturbation
-ensemble (`summary/population_distribution.npz`/`.png`). **This product is computed independently
+treats the basis as a **response matrix** and inverts the real analysis into an estimate of the
+*true* `f(p, β)` on the basis grid, with 16–84% bands from a perturbation ensemble
+(`summary/population_distribution.npz`/`.png`). **This product is computed independently
 of the posterior correction** — both are built from the same basis, but neither uses the other's
 results: the posterior locates the population's *peak*; this estimates the population's full
-*spread across objects*. *Caveat:* the unfolding assumes the recovered solution of a
-mixture is the mixture of recovered solutions; the regularized inversion violates this mildly
-(measured with the built-in mixture validation), so treat unfolded shapes as indicative and check
-the printed `relerr`.
+*spread across objects*.
+
+Two response spaces are available via `--space {cdf,w}`:
+
+- **`cdf` (default, recommended for evaluating systematics):** the response columns are each
+  basis point's simulated **amplitude CDF**, and the observation is the population's pooled
+  amplitude CDF. Pooling amplitudes *is* mixing, so the forward model is **exactly linear in
+  mixtures** — the residual misfit is measurement + sampling noise only, with no inversion model
+  error. Requirements: a basis whose units saved their amplitude samples (built from 2026-07-08
+  on), and the observed CDF from either the analysis's saved per-trial amplitudes (new analyses)
+  or `--obsdir <dir>` to recompute it directly from the `.obs` files (pass the analysis's
+  `--wanted/--date-tol/--phase-angle-limit` so the cuts match).
+- **`w`:** the original response over recovered joint solutions; works with any basis/analysis.
+  *Caveat:* it assumes the recovered solution of a mixture is the mixture of recovered solutions,
+  which the regularized inversion violates mildly (measured with the built-in mixture
+  validation) — treat W-space shapes as indicative and check the printed `relerr`.
 
 ### The whole pipeline
 
