@@ -435,15 +435,15 @@ and summary diagnostics come from a 100-trial LEADER analysis.
 `A`; the relative error measures how well the reconstructed CDF (∑ wᵢⱼFᵢⱼ) matches the observed one.
 The solved occupation numbers `w` over the `(p, β)` grid, and the smoothed joint distribution:
 
-Fit of the amplitude CDF
-Occupation numbers over (p, beta)
-Smoothed joint distribution f(p, beta)
+![Fit of the amplitude CDF](docs/images/RelativeError.png)
+![Occupation numbers over (p, beta)](docs/images/OccupationNumbers_w.png)
+![Smoothed joint distribution f(p, beta)](docs/images/Solutions_smoothed.png)
 
 **Population summaries (across all trials).** The peak of the shape (`p`) and spin-axis (`β`)
 distributions over all trials, each with a Gaussian fit giving the population value and its spread:
 
-Distribution of p peaks
-Distribution of beta peaks
+![Distribution of p peaks](docs/images/Summary_pmax.png)
+![Distribution of beta peaks](docs/images/Summary_betamax.png)
 
 **Per-population bias correction.** Running the full pipeline on this dataset
 
@@ -457,14 +457,14 @@ derives a correction from Hygiea's *own* observing geometry: a bias map over ass
 recovered means (colored, ±1σ over seeds) depart from the assigned truth (dashed) as a function of
 each input parameter — making the direction of the bias and the `p`–`β` interdependence explicit:
 
-Hygiea bias-map summary: recovered vs assigned p and beta
+![Hygiea bias-map summary: recovered vs assigned p and beta](docs/images/Hygiea_sweep_summary.png)
 
 `p` is recovered biased low everywhere, and by *more* at low spin latitude (the blue `β_peak=11°`
 curve sits farthest below the diagonal); `β` is compressed toward mid-range (over-estimated below
 ~50°, under-estimated above), nearly independent of `p_peak`. Fitting a recovered→true mapping to
 these points recovers the assigned peaks well (R² = 0.93 for both `p` and `β`):
 
-Hygiea correction fit: corrected vs true p and beta
+![Hygiea correction fit: corrected vs true p and beta](docs/images/Hygiea_correction_fit.png)
 
 Applying it de-biases the LEADER result for the population (`population_report.txt`):
 
