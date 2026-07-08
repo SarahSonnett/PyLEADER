@@ -104,7 +104,7 @@ The pipeline flows in steps. `pyleader-population` runs steps **3–6** in one c
          │
    [3] pyleader-analysis             LEADER inversion → recovered (p, β) + spread
          │
-   [4] pyleader-bias-map             synthetic (p,β) grid on THIS population's geometry
+   [4] pyleader-bias-map             determine the bias map on THIS population's geometry
          │
    [5] pyleader-fit-correction       fit recovered→true correction_function.json
          │
@@ -153,10 +153,15 @@ pyleader-build-obs --famid BG_IB_Ctypes --population background
 - **What it does:** 
 resolves the population to its member objects, queries NEOWISE @ IPAC for clean
 photometry, and writes one `.obs` file per object (photometry + Sun/observer geometry per point).
-- **Input:**
-  - membership files under `--base-dir`
-  - `AllMBAFamilyMembers.txt` (families) or `BGobjs_<REGION>_<TYPE>type_neowise.txt` (backgrounds)
-  - plus `neowise_mainbelt.csv`
+- **Input:** (membership and catalog files under `--base-dir`)
+  - `AllMBAFamilyMembers.txt` (families) — the collisional-family membership list from the
+    [Asteroid Families Portal](http://asteroids.matf.bg.ac.rs/fam/) (Radović et al. 2017;
+    downloaded July 2025), concatenated with the newly identified family members of
+    Nesvorný et al. (2024); see [References](#references)
+  - or `BGobjs_<REGION>_<TYPE>type_neowise.txt` (backgrounds) — background (non-family) object
+    selections, already cross-matched with NEOWISE
+  - plus `neowise_mainbelt.csv` — object diameters from the NEOWISE mission data release
+    (Mainzer et al. 2019, [doi:10.26033/18S3-2Z54](https://doi.org/10.26033/18S3-2Z54))
 - **Arguments:**
   - `--famid ID` the integer Nesvorný family ID (e.g. `1128`), or a `BG_<REGION>_<TYPE>types` id for a background population (e.g. `BG_IB_Ctypes`) *(required)*
   - `--population {family,background}` type of population *(default* `family`*; set* `background` *for* `BG_*` *ids)*
@@ -198,7 +203,10 @@ Steps 3–6 chain is needed for bias-corrected results.
   draws) — the scatter of the recovered peaks across trials is what provides the spread on the
   result. Total inversions = `ntrials`; total object draws = `ntrials × ndraws`.
 - **Input:**
-  - the population's `.obs` directory (from Step 2) + `neowise_mainbelt.csv` for diameters. The directory is derived as `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/`; use `--obsdir DIR` to read from an exact directory that doesn't follow this naming.
+  - the population's `.obs` directory (from Step 2) + `neowise_mainbelt.csv` for diameters
+    (NEOWISE mission data release, Mainzer et al. 2019 — see [References](#references)). The
+    directory is derived as `<base-dir>/<Fam|>{id}_data_<cat>_<filter>/`; use `--obsdir DIR` to
+    read from an exact directory that doesn't follow this naming.
 - **Arguments:**
   - `--famid ID` the integer designation for the collisional family represented by the .obs files *(required)*
   - `--diam-low` / `--diam-high` diameter window in km *(≥ 0, low < high; default 3–5)*
@@ -228,7 +236,7 @@ Steps 3–6 chain is needed for bias-corrected results.
 
 
 
-### Step 4 — Synthetic sweep
+### Step 4 — Determine the bias map
 
 ```sh
 pyleader-bias-map                  # inside a virtual environment
@@ -249,17 +257,17 @@ across a grid of assigned peaks.
   the Step-5 correction is fit from. **`pyleader-spot-check`** runs a **single** experiment at one
   assigned `(p, β)` and keeps that run's full diagnostics — its purpose is *inspection*: spot-check
   how well LEADER recovers one assigned distribution, debug scattering/geometry choices, or
-  illustrate the method. The sweep calls the same single-run machinery internally.
+  illustrate the method. The bias map calls the same single-run machinery internally.
 - **Input:**
   - DAMIT models (`damit_models/`, from Step 1)
   - a geometry source: a directory of real `.obs` files whose observing cadence/geometry the
     synthetic objects are "observed" with (see `--geometry-dir` below; inside
     `pyleader-population` this is automatically the analyzed population's own files).
 - **Arguments:**
-  - `--p-peaks P …` assigned elongation peaks *(each* `0 < p ≤ 1`*; required for the sweep;
+  - `--p-peaks P …` assigned elongation peaks *(each* `0 < p ≤ 1`*; required for the bias map;
     pipeline default 0.35 0.45 0.55 0.65 0.75)*
   - `--b-peaks B …` assigned latitude peaks in **degrees** *(each* `0 < β < 90`*; required for the
-    sweep; pipeline default 10 30 50 75; converted to radians internally)*
+    bias map; pipeline default 10 30 50 75; converted to radians internally)*
   - `--ndraws N` synthetic objects per grid point *(int ≥ 1, default 1000)*
   - `--nseeds N` realizations per grid point for error bars *(int ≥ 1, default 1)*
   - `--scattering {ls_lambert,hapke}` *(default* `ls_lambert`*, matching the MATLAB code)*
@@ -288,7 +296,7 @@ python scripts/fit_correction.py  # outside a virtual environment
 
 - **What it does:** 
 fits the recovered→true mapping (a 2-D quadratic in recovered `p`, `β`) from a
-sweep CSV — the correction to apply to real LEADER output.
+bias-map CSV — the correction to apply to real LEADER output.
 - **Input:**
   - a `sweep_stats.csv` from Step 4
 - **Arguments:**
@@ -340,12 +348,12 @@ pyleader-population BG_IB_Ctypes --build
 - **Arguments:**
   - the positional population `ID` *(required)*
   - the Step-3 analysis options (`--diam-low/-high`, `--ntrials`, `--ndraws`, `--phase-angle-limit`, `--date-tol`, `--wanted`)
-  - the Step-4 sweep options (`--p-peaks`, `--b-peaks`, `--sweep-ndraws`, `--nseeds`, `--scattering`)
+  - the Step-4 bias-map options (`--p-peaks`, `--b-peaks`, `--sweep-ndraws`, `--nseeds`, `--scattering`)
   - `--correction-stat {peak,mean,median}` *(default* `peak`*)*
   - `--build`
   - `--refresh-models` re-download the latest DAMIT models first
   - `--base-dir PATH`
-  - `--obsdir DIR` read/write `.obs` from an exact directory (the correction sweep's geometry follows it)
+  - `--obsdir DIR` read/write `.obs` from an exact directory (the bias map's geometry follows it)
   - `--seed N`
 - **Output:**
   - the analysis directory plus `correction_sweep/`, the population-specific `correction_function.json` + `correction_fit.png`, and `population_report.txt` (recovered → corrected `p`, `β`, with an extrapolation warning when the recovered value falls outside the synthetic range).
@@ -400,12 +408,13 @@ Distribution of beta peaks
 pyleader-population 10 --diam-low 3 --diam-high 5 --ntrials 100 --nseeds 3
 ```
 
-derives a correction from Hygiea's *own* observing geometry: a synthetic `(p_peak, β_peak)` sweep
-(20 grid points × 3 seeds) observed at the family's cadence. The **sweep summary** shows how LEADER's
+derives a correction from Hygiea's *own* observing geometry: a bias map over assigned
+`(p_peak, β_peak)` values (20 grid points × 3 seeds) observed at the family's cadence. The
+**bias-map summary** shows how LEADER's
 recovered means (colored, ±1σ over seeds) depart from the assigned truth (dashed) as a function of
 each input parameter — making the direction of the bias and the `p`–`β` interdependence explicit:
 
-Hygiea sweep summary: recovered vs assigned p and beta
+Hygiea bias-map summary: recovered vs assigned p and beta
 
 `p` is recovered biased low everywhere, and by *more* at low spin latitude (the blue `β_peak=11°`
 curve sits farthest below the diagonal); `β` is compressed toward mid-range (over-estimated below
@@ -423,7 +432,7 @@ Applying it de-biases the LEADER result for the population (`population_report.t
 | `β` (deg) | 30.4      | **3.1**   |
 
 
-As the sweep predicts, `p` is corrected upward, and `β` — only weakly constrained by amplitudes and
+As the bias map predicts, `p` is corrected upward, and `β` — only weakly constrained by amplitudes and
 here near the low edge of the synthetic recovered range (`β_rec ∈ [28°, 90°]`) — shifts toward the
 pole; the report flags such near/out-of-range cases as uncertain.
 
@@ -440,7 +449,7 @@ pyleader/
   postprocess.py   solution smoothing;  plotting.py  per-trial & summary plots
   analysis.py      run_analysis(): the LEADER experiment driver
   obsfiles/        build .obs files from IRSA + JPL Horizons
-  synthetic/       synthetic validation, sweep, and bias correction (from DAMIT models)
+  synthetic/       synthetic validation, bias mapping, and correction (from DAMIT models)
   cli/             console-command implementations (scripts/*.py are thin shims)
 ```
 
@@ -466,4 +475,18 @@ EPSC-DPS2025-2069. [doi:10.5194/epsc-dps2025-2069](https://doi.org/10.5194/epsc-
 Astronomy & Astrophysics, 513, A46. [doi:10.1051/0004-6361/200912693](https://doi.org/10.1051/0004-6361/200912693)
 — source of the shape models used by the synthetic-validation pipeline
 ([DAMIT database](https://damit.cuni.cz/)).
+- Mainzer, A. K., Bauer, J. M., Cutri, R. M., Grav, T., Kramer, E. A., Masiero, J. R.,
+Sonnett, S., & Wright, E. L. (Eds.) 2019, *NEOWISE Diameters and Albedos V2.0*,
+NASA Planetary Data System. [doi:10.26033/18S3-2Z54](https://doi.org/10.26033/18S3-2Z54)
+— source of the object diameters (`neowise_mainbelt.csv`) used for the sample selection in
+Steps 2–3.
+- Radović, V., Novaković, B., Carruba, V., & Marčeta, D. 2017, *An automatic approach to exclude
+interlopers from asteroid families*, Monthly Notices of the Royal Astronomical Society, 471, 1215.
+[doi:10.1093/mnras/stx1273](https://doi.org/10.1093/mnras/stx1273)
+— the [Asteroid Families Portal](http://asteroids.matf.bg.ac.rs/fam/), source of the collisional
+family membership list (`AllMBAFamilyMembers.txt`).
+- Nesvorný, D., Roig, F., Vokrouhlický, D., & Brož, M. 2024, *Catalog of Proper Orbits for
+1.25 Million Main-belt Asteroids and Discovery of 136 New Collisional Families*, Astrophysical
+Journal Supplement Series, 274, 25. [doi:10.3847/1538-4365/ad675c](https://doi.org/10.3847/1538-4365/ad675c)
+— source of the newly identified family members concatenated into the membership list.
 
