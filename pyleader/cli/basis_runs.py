@@ -36,10 +36,10 @@ from pyleader.synthetic.basis import run_basis  # noqa: E402
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Run the fixed-peak basis campaign for a population.")
     p.add_argument("pop_id", help="family id (e.g. 1128), background id (BG_*), or a label when using --geometry-dir")
-    p.add_argument("--grid-np", type=int, default=8, help="number of p grid points (default 8)")
-    p.add_argument("--grid-nb", type=int, default=8, help="number of beta grid points (default 8)")
-    p.add_argument("--p-range", type=float, nargs=2, default=[0.30, 0.80], metavar=("LO", "HI"),
-                   help="p grid range (default 0.30 0.80)")
+    p.add_argument("--grid-np", type=int, default=12, help="number of p grid points (default 12)")
+    p.add_argument("--grid-nb", type=int, default=12, help="number of beta grid points (default 12)")
+    p.add_argument("--p-range", type=float, nargs=2, default=[0.30, 0.95], metavar=("LO", "HI"),
+                   help="p grid range (default 0.30 0.95)")
     p.add_argument("--b-range", type=float, nargs=2, default=[6.0, 84.0], metavar=("LO", "HI"),
                    help="beta grid range in DEGREES (default 6 84)")
     p.add_argument("--nseeds", type=int, default=4, help="realizations per grid point (default 4)")

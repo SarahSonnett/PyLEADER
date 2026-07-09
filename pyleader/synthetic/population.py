@@ -82,6 +82,23 @@ def _geometry_files(cfg: SyntheticConfig):
     return files
 
 
+# Parsed DAMIT models, cached per process. The rejection sampling in
+# _draw_shape averages ~14 attempts per accepted shape, and re-parsing the
+# model file dominated the basis runtime (~68% of a synthetic run); there are
+# only ~350 models (~20 MB parsed), so cache them. Entries are read-only:
+# _draw_shape multiplies into a NEW array and never mutates R0/F.
+_MODEL_CACHE: dict = {}
+
+
+def _cached_model(fname):
+    hit = _MODEL_CACHE.get(fname)
+    if hit is None:
+        x, y, z, F = read_damit_model(fname)
+        hit = (np.column_stack([x, y, z]), F)
+        _MODEL_CACHE[fname] = hit
+    return hit
+
+
 def _draw_shape(model_files, cfg: SyntheticConfig, p_target=None):
     """Pick and stretch a DAMIT model until its elongation matches the target.
 
@@ -92,11 +109,10 @@ def _draw_shape(model_files, cfg: SyntheticConfig, p_target=None):
         p_target = cfg.p_peak
     while True:
         fname = random.choice(model_files)
-        x, y, z, F = read_damit_model(fname)
-        R = np.column_stack([x, y, z])
+        R0, F = _cached_model(fname)
         # Random stretch, factor >= 1 on each axis
         stretch = np.maximum(1.0, 2.0 * np.abs(np.random.randn(3)))
-        R = R * stretch
+        R = R0 * stretch
         props = ellipsoid_properties(R, F)
         if abs(props.p - p_target) <= cfg.p_accept_tol:
             return props

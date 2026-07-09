@@ -64,6 +64,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--basis-dir", default=None,
                    help="fixed-peak basis directory (default '<analysis outdir>_basis'; auto-built/"
                         "resumed when missing)")
+    p.add_argument("--basis-grid", type=int, nargs=2, metavar=("NP", "NB"),
+                   default=[d.basis_np, d.basis_nb],
+                   help="basis grid points in p and beta (default 12 12); sets the "
+                        "resolution of the posterior and of pyleader-unfold's "
+                        "population distribution")
+    p.add_argument("--basis-p-range", type=float, nargs=2, metavar=("LO", "HI"),
+                   default=list(d.basis_p_range),
+                   help="assigned p range of the basis (default 0.30 0.95)")
+    p.add_argument("--basis-b-range", type=float, nargs=2, metavar=("LO", "HI"),
+                   default=list(d.basis_b_range_deg),
+                   help="assigned beta range of the basis in DEGREES (default 6 84)")
     p.add_argument("--basis-nseeds", type=int, default=d.basis_nseeds,
                    help="realizations per basis grid point (default 4)")
     p.add_argument("--basis-nproc", type=int, default=None,
@@ -94,7 +105,9 @@ def main(argv=None) -> int:
         bias_map_ndraws=a.bias_map_ndraws, bias_map_nseeds=a.bias_map_nseeds,
         scattering=a.scattering, noise_model=a.noise_model,
         correction_stat=a.correction_stat, correction_method=a.correction_method,
-        basis_dir=a.basis_dir, basis_nseeds=a.basis_nseeds, basis_nproc=a.basis_nproc,
+        basis_dir=a.basis_dir, basis_np=a.basis_grid[0], basis_nb=a.basis_grid[1],
+        basis_p_range=tuple(a.basis_p_range), basis_b_range_deg=tuple(a.basis_b_range),
+        basis_nseeds=a.basis_nseeds, basis_nproc=a.basis_nproc,
         posterior_stat=a.posterior_stat, base_dir=a.base_dir, obsdir=a.obsdir,
     )
     res = run_population(cfg, do_build=a.build, refresh_models=a.refresh_models, seed=a.seed)

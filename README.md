@@ -405,7 +405,7 @@ cross-check.
 **Step 4b — Build the fixed-peak basis** (`pyleader-basis` / `python scripts/basis_runs.py`):
 
 ```sh
-pyleader-basis 1128 --diam-low 1 --diam-high 100      # 8×8 grid × 4 seeds (defaults)
+pyleader-basis 1128 --diam-low 1 --diam-high 100      # 12×12 grid × 4 seeds (defaults)
 ```
 
 - **What it does:** runs fixed-peak synthetic populations (every object at one assigned
@@ -419,8 +419,10 @@ pyleader-basis 1128 --diam-low 1 --diam-high 100      # 8×8 grid × 4 seeds (de
     explicit `--geometry-dir`)
 - **Arguments:**
   - the positional population `ID` *(required; a label when using* `--geometry-dir`*)*
-  - `--grid-np N` / `--grid-nb N` grid size *(default 8×8)*
-  - `--p-range LO HI` assigned `p` range *(default 0.30 0.80)*
+  - `--grid-np N` / `--grid-nb N` grid size *(default 12×12; also sets the resolution of the
+    posterior and of the Step-6b population distribution)*
+  - `--p-range LO HI` assigned `p` range *(default 0.30 0.95 — wide enough that real recoveries
+    cannot pin against the upper edge)*
   - `--b-range LO HI` assigned `β` range in **degrees** *(default 6 84)*
   - `--nseeds N` realizations per grid point *(default 4; see Runtime below)*
   - `--ndraws N` synthetic objects per run *(default 1000)*
@@ -439,9 +441,12 @@ pyleader-basis 1128 --diam-low 1 --diam-high 100      # 8×8 grid × 4 seeds (de
   - one `gp_p*_b*_seed*/synthetic_result.npz` per unit
   - `basis_info.json` (grid, seeds, tolerances, and the noise model used)
   - `noise_model.json` + `noise_model_fit.png` (when fit from the geometry files)
-- **Runtime & how many seeds:** each unit takes ≈ 21 s single-core, so wall time ≈ units × 21 s ÷
-  workers — the default 8×8 grid × 4 seeds takes **~10–15 min** on 8 workers (× 8 seeds ~25 min,
-  × 16 ~50 min; exactly linear in `--nseeds`). The seeds measure the *scatter* of the recovery,
+- **Runtime & how many seeds:** wall time ≈ units × (time per unit) ÷ workers, and is exactly
+  linear in grid points × `--nseeds`. A unit costs ≈ 25 s single-core, dominated by the
+  fixed-peak shape sampling (the tight ±0.02 tolerance accepts only ~1 in 14 stretched DAMIT
+  shapes; the parsed models are cached in memory per worker). The default 12×12 grid × 4 seeds
+  (576 units) is therefore **~30–40 min** on 8 workers (× 8 seeds doubles it). The seeds measure
+  the *scatter* of the recovery,
   and the scatter estimate improves as $1/\sqrt{2(n_{\rm seeds}-1)}$: **4 seeds** → known to ~±40%
   (fine for exploration), **8–10** → ~±25% (recommended for publication-grade credible intervals),
   **16+** → diminishing returns. Because the basis is **resumable**, you can start at 4 seeds and
@@ -571,8 +576,10 @@ pyleader-population BG_IB_Ctypes --build
     `both`*; posterior auto-builds/resumes the Step-4b fixed-peak basis)*
   - `--posterior-stat {peak,median,both}` which recovered statistic the posterior inverts
     *(default* `both`*, which also reports the peak-vs-median consistency check)*
-  - `--basis-dir PATH` *(default* `<analysis outdir>_basis`*)*; `--basis-nseeds N` *(default 4)*;
-    `--basis-nproc N` parallel workers *(default: 8, capped at cores − 2)*
+  - `--basis-dir PATH` *(default* `<analysis outdir>_basis`*)*; `--basis-grid NP NB` *(default
+    12 12)*; `--basis-p-range LO HI` *(default 0.30 0.95)*; `--basis-b-range LO HI` degrees
+    *(default 6 84)*; `--basis-nseeds N` *(default 4)*; `--basis-nproc N` parallel workers
+    *(default: 8, capped at cores − 2)*
   - `--build`
   - `--refresh-models` re-download the latest DAMIT models first
   - `--base-dir PATH`

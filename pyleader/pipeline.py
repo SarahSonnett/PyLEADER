@@ -76,9 +76,9 @@ class PopulationConfig:
     posterior_stat: str = "both"
     # fixed-peak basis campaign for the posterior correction (auto-built/resumed if absent)
     basis_dir: Optional[str] = None            # default: "<analysis outdir>_basis"
-    basis_np: int = 8                          # p grid points
-    basis_nb: int = 8                          # beta grid points
-    basis_p_range: tuple = (0.30, 0.80)
+    basis_np: int = 12                         # p grid points
+    basis_nb: int = 12                         # beta grid points
+    basis_p_range: tuple = (0.30, 0.95)        # wide enough that real recoveries can't pin at the edge
     basis_b_range_deg: tuple = (6.0, 84.0)
     basis_nseeds: int = 4
     basis_nproc: Optional[int] = None          # default: 8, capped at cores - 2
