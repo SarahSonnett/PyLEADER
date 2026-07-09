@@ -47,21 +47,25 @@ Remaining / nice-to-have:
       which badly understates NEOWISE uncertainties (Fam1128 median relerr ≈ 30%), so their
       corrections understate the bias. `run_basis` warns when resuming such a directory; rebuild
       in a fresh `--outdir` (or pass `--noise-model flat` to reproduce the old behaviour).
-- [ ] **Calibrate the effective per-epoch noise (BLOCKER for production empirical-noise use)** —
-      the 2026-07-08 Fam3556 rerun showed that applying the catalog fluxerr as *independent
-      per-epoch Gaussian* scatter yields a forward model inconsistent with the real data: every
-      synthetic grid point recovers p ≈ 0.16–0.31 while the real analysis recovers p ≈ 0.45–0.51,
-      pinning the posterior at the p = 0.80 grid edge (multimodal, huge β intervals); meanwhile
-      the real amplitude CDF (median A ≈ 0.62) sits *above* every synthetic column (max ≈ 0.53).
-      Likely cause: NEOWISE fluxerr contains correlated/systematic components that do not appear
-      in the intra-apparition point-to-point scatter that η measures, so treating it as white
-      noise overstates the η-relevant noise (while the ellipsoid model may simultaneously
-      understate the real amplitude variance — non-ellipsoidal shapes, albedo variegation,
-      p < 0.30 objects). Candidate fixes: (a) estimate the effective white-noise fraction from
-      intra-apparition residual scatter of low-amplitude objects; (b) calibrate a global noise
-      scale factor so synthetic η distributions match the real population's; (c) extend
-      basis_p_range beyond 0.80 regardless. Until then, treat empirical-noise corrections with
-      caution and compare against `--noise-model flat`.
+- [x] **Calibrate the effective per-epoch noise** (2026-07-08) — applying the catalog fluxerr as
+      *independent per-epoch Gaussian* scatter made the forward model inconsistent with the real
+      Fam3556 data (all synthetic grid points recovered p ≈ 0.16–0.31 vs the real 0.45–0.51;
+      posterior pinned at the p = 0.80 grid edge). Cause: the catalog fluxerr is a *total* error
+      budget — most of it is calibration/systematic terms that shift a whole apparition
+      coherently and cancel out of the differential amplitude statistic η. Fix implemented:
+      `measure_white_fraction` (noise.py) takes the 10th-percentile envelope of
+      (observed intra-apparition scatter ÷ catalog fluxerr) over all apparitions — the quietest
+      apparitions bound the genuinely random epoch-to-epoch component — and scales the noise
+      model by it (Fam3556: 0.32). Recorded in `noise_model.json` / the diagnostic figure /
+      `basis_info.json`. **Verified** on a full Fam3556 rerun (256-unit basis, `_basis_cal`):
+      the posterior came off the grid edge and is unimodal in both channels — median channel
+      p = 0.586 [0.546, 0.624], β = 44.6° [36.0, 53.4] — with the peak/median consistency check
+      passing. Remaining follow-ups: consider extending `basis_p_range` beyond 0.80, and
+      re-examine the `white_percentile` choice once a few populations have been calibrated.
+      Note from the same rerun: the CDF-space unfolding fits the observed amplitude CDF to
+      relerr ≈ 0.004, but the mixture validation shows β localization in the *unfolded
+      distribution* stays degeneracy-limited at realistic noise — quote the posterior for the
+      peak and treat the unfolded β marginal as indicative.
 
 ## Optional follow-on tooling (deferred)
 

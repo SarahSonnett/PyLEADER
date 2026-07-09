@@ -266,14 +266,38 @@ across a grid of assigned peaks.
   (the Gaussian width around `β_peak`). The Step-4b fixed-peak preset overrides these to
   near-delta values (`0.02 / 0.0 / – / 1.0 / 0.01`).
 - **Photometric noise:** by default (`--noise-model empirical`) the synthetic fluxes receive
-  noise from the population's **own flux–uncertainty relation**: a quadratic in log–log space,
-  `log₁₀(σ_F/F) = c₀ + c₁·log₁₀(F) + c₂·log₁₀(F)²`, fit once to every (flux, fluxerr) pair in
-  the geometry `.obs` files and documented as `noise_model.json` + `noise_model_fit.png`. Each
-  synthetic brightness is scaled to its borrowed object's mean measured flux and the relation is
-  evaluated **per epoch**, so fainter objects — and fainter rotational phases — get
-  proportionally larger errors. This matters: the original release's flat 1% Gaussian
-  (`--noise-model flat`) understates typical NEOWISE uncertainties by an order of magnitude
-  (e.g. family 1128's median relative error is ≈30%), which understates the recovery bias.
+  noise matched to the population's **own photometry**, built in two measured steps:
+
+  1. **The error-bar relation.** A quadratic in log–log space,
+     `log₁₀(σ_F/F) = c₀ + c₁·log₁₀(F) + c₂·log₁₀(F)²`, is fit once to every (flux, fluxerr)
+     pair in the population's `.obs` files. It reproduces the familiar two-regime shape of
+     survey photometry: at the faint end the absolute error is flat (set by the sky background
+     and detector, independent of source brightness), while for bright sources the error grows
+     in proportion to the flux (set by calibration). Each synthetic brightness is scaled to its
+     borrowed object's mean measured flux and the relation is evaluated point by point, so
+     fainter objects — and the fainter rotational phases of a single lightcurve — get
+     proportionally larger errors.
+  2. **The repeatability calibration.** A catalog error bar answers *"how far might this
+     measurement be from the true flux?"* — it includes systematic terms (zero-point and other
+     calibration uncertainties) that shift **all** of an object's measurements up or down
+     *together*. But LEADER's amplitude statistic is differential: it only feels the
+     **epoch-to-epoch scatter** — how much the measurements jitter relative to *each other* —
+     and a shared calibration offset cancels out of it exactly. So the pipeline also measures,
+     from the data themselves, what fraction of the quoted error bar shows up as genuine
+     point-to-point scatter: in the *quietest* apparitions (near-spherical objects, pole-on
+     viewing — negligible real lightcurve variation) the observed scatter divided by the quoted
+     fluxerr directly reveals that fraction. This **repeatability fraction** (stored as
+     `white_fraction`; the statistical term is "white noise" for random, uncorrelated
+     scatter) multiplies the relation of step 1 before it is applied. For family 3556 it is
+     0.32 — i.e. only about a third of the NEOWISE error bar behaves as epoch-to-epoch jitter.
+
+  The fit, the fraction, and a diagnostic figure are recorded as `noise_model.json` +
+  `noise_model_fit.png` so every simulation's noise is traceable to a measurement. Getting this
+  right matters in both directions: the original release's flat 1% Gaussian (`--noise-model
+  flat`) understates the real jitter for faint NEOWISE sources (which inflates apparent
+  brightness variation and biases the recovery), while injecting the **full** catalog error bar
+  as jitter overstates it several-fold — enough to push the recovered `p` of every synthetic
+  population far below anything the real data produce.
 - **`pyleader-bias-map` vs `pyleader-spot-check`:** the **bias map** runs one synthetic experiment per
   point of an assigned `(p_peak, β_peak)` **grid** (× `nseeds` realizations) and tabulates the
   results — its purpose is to *map the recovery bias across parameter space*, producing the table
@@ -388,18 +412,33 @@ pyleader-basis 1128 --diam-low 1 --diam-high 100      # 8×8 grid × 4 seeds (de
   `(p, β)` — a near-delta distribution, in statistical terms)
   on a grid of assigned values, at the population's own geometry — the sampled forward model.
   **Resumable** (completed points are skipped) and **parallel** (8 workers by default, capped at
-  cores − 2); a chunk
-  flag `--task k/N` supports cluster job arrays.
-- **Arguments:** `--grid-np/--grid-nb` grid size *(default 8×8)*; `--p-range LO HI` *(default
-  0.30 0.80)*; `--b-range LO HI` in degrees *(default 6 84)*; `--nseeds` *(default 4)*;
-  `--ndraws` *(default 1000)*; `--noise-model {empirical,flat}` *(default* `empirical`*; the fit
-  is recorded in the basis directory)*; `--nproc`; `--task k/N`; `--outdir` *(default
-  `<analysis outdir>_basis`)*; plus the Step-3 population/tolerance options.
+  cores − 2); a chunk flag `--task k/N` supports cluster job arrays.
+- **Input:**
+  - DAMIT models (`damit_models/`, from Step 1)
+  - the population's `.obs` files (resolved from the population ID + diameter cuts, or an
+    explicit `--geometry-dir`)
+- **Arguments:**
+  - the positional population `ID` *(required; a label when using* `--geometry-dir`*)*
+  - `--grid-np N` / `--grid-nb N` grid size *(default 8×8)*
+  - `--p-range LO HI` assigned `p` range *(default 0.30 0.80)*
+  - `--b-range LO HI` assigned `β` range in **degrees** *(default 6 84)*
+  - `--nseeds N` realizations per grid point *(default 4; see Runtime below)*
+  - `--ndraws N` synthetic objects per run *(default 1000)*
+  - `--noise-model {empirical,flat}` photometric noise *(default* `empirical`*; the fit is
+    recorded in the basis directory)*
+  - `--nproc N` worker processes *(default: 8, capped at cores − 2)*
+  - `--task k/N` run only the k-th of N chunks *(for job arrays)*
+  - `--outdir PATH` *(default* `<analysis outdir>_basis`*)*
+  - plus the Step-3 population/tolerance options (`--diam-low/-high`, `--phase-angle-limit`,
+    `--date-tol`, `--wanted`, `--population`, `--obsdir`, `--base-dir`)
 - **Consistency:** a basis must be built under **one** noise model throughout — mixing units is
   invalid, so `pyleader-basis` warns when resuming a directory whose existing units used a
   different one (bases predating the empirical model count as flat). Rebuild in a fresh
   `--outdir` after changing the noise model.
-- **Output:** one `gp_p*_b*_seed*/synthetic_result.npz` per unit + `basis_info.json`.
+- **Output:**
+  - one `gp_p*_b*_seed*/synthetic_result.npz` per unit
+  - `basis_info.json` (grid, seeds, tolerances, and the noise model used)
+  - `noise_model.json` + `noise_model_fit.png` (when fit from the geometry files)
 - **Runtime & how many seeds:** each unit takes ≈ 21 s single-core, so wall time ≈ units × 21 s ÷
   workers — the default 8×8 grid × 4 seeds takes **~10–15 min** on 8 workers (× 8 seeds ~25 min,
   × 16 ~50 min; exactly linear in `--nseeds`). The seeds measure the *scatter* of the recovery,
@@ -436,19 +475,28 @@ statistics (a rounder shape at low `β` mimics an elongated one seen pole-on), s
 family of truths is consistent with one recovery, and the posterior honestly assigns them all
 probability. When the ridge breaks into disjoint islands, the multimodality flag fires.
 
-Two measurement **channels**
-are available via `--posterior-stat {peak,median,both}` *(default `both`)*: the recovered
-**peak** (marginal argmax) and the recovered **median** (weighted median of the marginals — a
-continuous, less bin-quantized observable). Running both doubles as a **consistency check**,
-reported in `population_report.txt`: for a genuinely single-peaked population the two channels
-must agree (overlapping 68% intervals); disagreement flags a skewed or multimodal population.
-Per-channel artifacts: `summary/posterior_correction_{peak,median}.png` +
-`summary/posterior_{peak,median}.npz`. The basis is auto-built (and auto-resumed) if absent.
-**Assumption:** the posterior is calibrated on fixed-peak populations, so its meaning is
-conditional on the underlying population being approximately **single-peaked**. For strongly
-skewed or multimodal populations 'the peak' itself is ill-defined — the multimodality flag and
-the peak-vs-median consistency check are the built-in alarms, and the Step-6b population
-distribution is the product that can actually reveal such structure.
+- **Input:**
+  - the Step-3 analysis (its per-trial joint solutions) + the Step-4b basis
+    (auto-built and auto-resumed if absent)
+- **Arguments** (as `pyleader-population` flags; Step 5b runs inside the pipeline):
+  - `--posterior-stat {peak,median,both}` which recovered statistic is inverted *(default*
+    `both`*)*: the recovered **peak** (marginal argmax) or the recovered **median** (weighted
+    median of the marginals — a continuous, less bin-quantized observable). Running both
+    doubles as a **consistency check**, reported in `population_report.txt`: for a genuinely
+    single-peaked population the two channels must agree (overlapping 68% intervals);
+    disagreement flags a skewed or multimodal population.
+  - `--basis-dir PATH` / `--basis-nseeds N` / `--basis-nproc N` control the underlying basis
+    (see Step 4b and "The whole pipeline")
+- **Output:**
+  - `summary/posterior_correction_{peak,median}.png` (one figure per channel)
+  - `summary/posterior_{peak,median}.npz` (the posterior density + statistics)
+  - per-channel blocks and the peak-vs-median consistency line in
+    `summary/population_report.txt`
+- **Assumption:** the posterior is calibrated on fixed-peak populations, so its meaning is
+  conditional on the underlying population being approximately **single-peaked**. For strongly
+  skewed or multimodal populations 'the peak' itself is ill-defined — the multimodality flag and
+  the peak-vs-median consistency check are the built-in alarms, and the Step-6b population
+  distribution is the product that can actually reveal such structure.
 
 **Step 6b — Unfold the full distribution** (`pyleader-unfold` / `python scripts/unfold_analysis.py`):
 
@@ -456,27 +504,39 @@ distribution is the product that can actually reveal such structure.
 pyleader-unfold <analysis_outdir> --basis <analysis_outdir>_basis
 ```
 
-treats the basis as a **response matrix** and inverts the real analysis into an estimate of the
-*true* `f(p, β)` on the basis grid, with 16–84% bands from a perturbation ensemble
-(`summary/population_distribution.npz`/`.png`). **This product is computed independently
-of the posterior correction** — both are built from the same basis, but neither uses the other's
-results: the posterior locates the population's *peak*; this estimates the population's full
-*spread across objects*.
-
-Two response spaces are available via `--space {cdf,w}`:
-
-- **`cdf` (default, recommended for evaluating systematics):** the response columns are each
-  basis point's simulated **amplitude CDF**, and the observation is the population's pooled
-  amplitude CDF. Pooling amplitudes *is* mixing, so the forward model is **exactly linear in
-  mixtures** — the residual misfit is measurement + sampling noise only, with no inversion model
-  error. Requirements: a basis whose units saved their amplitude samples (built from 2026-07-08
-  on), and the observed CDF from either the analysis's saved per-trial amplitudes (new analyses)
-  or `--obsdir <dir>` to recompute it directly from the `.obs` files (pass the analysis's
-  `--wanted/--date-tol/--phase-angle-limit` so the cuts match).
-- **`w`:** the original response over recovered joint solutions; works with any basis/analysis.
-  *Caveat:* it assumes the recovered solution of a mixture is the mixture of recovered solutions,
-  which the regularized inversion violates mildly (measured with the built-in mixture
-  validation) — treat W-space shapes as indicative and check the printed `relerr`.
+- **What it does:** treats the basis as a **response matrix** and inverts the real analysis into
+  an estimate of the *true* `f(p, β)` on the basis grid, with 16–84% bands from a perturbation
+  ensemble. **This product is computed independently of the posterior correction** — both are
+  built from the same basis, but neither uses the other's results: the posterior locates the
+  population's *peak*; this estimates the population's full *spread across objects*.
+- **Two response spaces** (`--space {cdf,w}`):
+  - **`cdf` (default, recommended for evaluating systematics):** the response columns are each
+    basis point's simulated **amplitude CDF**, and the observation is the population's pooled
+    amplitude CDF. Pooling amplitudes *is* mixing, so the forward model is **exactly linear in
+    mixtures** — the residual misfit is measurement + sampling noise only, with no inversion
+    model error. Requires a basis whose units saved their amplitude samples (built from
+    2026-07-08 on).
+  - **`w`:** the original response over recovered joint solutions; works with any
+    basis/analysis. *Caveat:* it assumes the recovered solution of a mixture is the mixture of
+    recovered solutions, which the regularized inversion violates mildly (measured with the
+    built-in mixture validation) — treat W-space shapes as indicative and check the printed
+    `relerr`.
+- **Input:**
+  - the Step-3 analysis directory (its `Trial*/W_trial*.npz`; for `--space cdf`, the saved
+    per-trial amplitudes or the raw `.obs` files via `--obsdir`)
+  - a completed Step-4b basis
+- **Arguments:**
+  - the positional `analysis_outdir` *(required)*
+  - `--basis PATH` *(default* `<analysis_outdir>_basis`*)*
+  - `--space {cdf,w}` response space *(default* `cdf`*; see above)*
+  - `--obsdir DIR` recompute the observed amplitude CDF directly from these `.obs` files
+    *(for* `cdf` *with analyses that predate per-trial amplitude saving)*
+  - `--wanted N` / `--date-tol DAYS` / `--phase-angle-limit DEG` cuts used with `--obsdir`
+    *(defaults 5 / 60 / 40 — match the analysis)*
+  - `--n-ensemble N` perturbation re-solves for the error bands *(default 40)*
+  - `--seed N`
+- **Output:**
+  - `summary/population_distribution.npz` + `.png` (joint map + marginals with 16–84% bands)
 
 ### The whole pipeline
 
@@ -504,7 +564,8 @@ pyleader-population BG_IB_Ctypes --build
   - the Step-3 analysis options (`--diam-low/-high`, `--ntrials`, `--ndraws`, `--phase-angle-limit`, `--date-tol`, `--wanted`)
   - the Step-4 bias-map options (`--p-peaks`, `--b-peaks`, `--bias-map-ndraws`, `--bias-map-nseeds`, `--scattering`)
   - `--noise-model {empirical,flat}` synthetic photometric noise *(default* `empirical`*: the
-    population's own flux–fluxerr relation, fit once and applied per epoch; see Step 4)*
+    population's own flux–fluxerr relation, calibrated to the measured epoch-to-epoch
+    repeatability and applied point by point; see Step 4)*
   - `--correction-stat {peak,mean,median}` *(default* `peak`*)*
   - `--correction-method {quadratic,posterior,both}` which correction(s) to derive *(default*
     `both`*; posterior auto-builds/resumes the Step-4b fixed-peak basis)*
@@ -656,9 +717,8 @@ here near the low edge of the synthetic recovered range (`β_rec ∈ [28°, 90°
 pole; the report flags such near/out-of-range cases as uncertain.
 
 **Posterior correction (family 3556).** The probabilistic products are best read off an example.
-Below is the median-channel posterior for family 3556 (1–100 km, 100 trials, 8×8 basis × 4 seeds;
-built before the empirical noise model, so the numbers — not the interpretation — will shift when
-rerun):
+Below is the median-channel posterior for family 3556 (1–100 km, 100 trials, 8×8 basis × 4
+seeds, empirical photometric noise calibrated to the measured epoch-to-epoch repeatability):
 
 ![Family 3556 posterior correction, median channel](docs/images/Fam3556_posterior_correction_median.png)
 
@@ -667,9 +727,9 @@ A possible interpretation, element by element:
 - The red **×** is what LEADER actually recovered (here the recovered *median* statistic,
   `p = 0.45`, `β = 38°`). The colored surface answers: *given that recovery, where is the
   population's true peak likely to be?* The offset between the × and the probability mass **is**
-  the bias — for this family, LEADER under-reports `p` by ~0.13 and over-reports `β` by ~6°.
+  the bias — for this family, LEADER under-reports `p` by ~0.14 and under-reports `β` by ~7°.
 - The credible contours are compact and **single-peaked**, so this dataset supports a definite
-  statement: *the family's true peak lies at `p = 0.58 ± 0.03`, `β = 32° ± 4°` (68%)* — the
+  statement: *the family's true peak lies at `p = 0.59 ± 0.04`, `β = 45° ± 9°` (68%)* — the
   family is moderately elongated with mid-latitude spins. Had the region been a long diagonal
   ridge or several islands (see the multimodality note in Step 5b), the honest statement would
   instead be "several true populations are consistent with this recovery".
