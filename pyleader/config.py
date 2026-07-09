@@ -137,17 +137,31 @@ class AnalysisConfig:
         )
 
     @property
-    def outdir(self) -> str:
-        """Output analysis directory (matches the notebook's ``outdir``).
+    def run_base(self) -> str:
+        """Base path shared by all of one run's output directories.
 
-        The ``forcedN`` notebook prefixes the directory with ``ForcedN<wanted>_``.
+        Role suffixes are appended: ``<run_base>_analysis`` (per-trial
+        diagnostics), ``<run_base>_summary`` (headline products),
+        ``<run_base>_biasmap`` and ``<run_base>_basis`` (simulation libraries)
+        — four sibling directories that sort together in the working dir.
+        The ``forcedN`` variant prefixes the name with ``ForcedN<wanted>_``.
         """
         prefix = f"ForcedN{self.wanted}_" if self.forced_n else ""
         return (
-            f"{self.base_dir}/{prefix}{self._famtoken}_analysis_"
+            f"{self.base_dir}/{prefix}{self._famtoken}_"
             f"{self.cat}_{self.filterpriority}_"
             f"{self.diam_low}km_to_{self.diam_high}km"
         )
+
+    @property
+    def outdir(self) -> str:
+        """The analysis directory (Step 3's per-trial output)."""
+        return f"{self.run_base}_analysis"
+
+    @property
+    def summary_outdir(self) -> str:
+        """The summary directory: every headline product, one place."""
+        return f"{self.run_base}_summary"
 
     @property
     def diam_tag(self) -> str:

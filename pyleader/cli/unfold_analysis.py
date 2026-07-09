@@ -19,9 +19,8 @@ Two response spaces (``--space``):
 
 Example::
 
-    python scripts/unfold_analysis.py \
-        /path/to/Fam1128_analysis_..._1.0km_to_100.0km \
-        --basis /path/to/Fam1128_analysis_..._basis
+    python scripts/unfold_analysis.py /path/to/Fam1128_..._1.0km_to_100.0km_analysis
+    # the _basis and _summary siblings are found from the run's base name
 """
 
 from __future__ import annotations
@@ -43,7 +42,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Unfold a LEADER analysis into f_true(p, beta).")
     p.add_argument("analysis_outdir", help="analysis output directory (containing Trial*/W_trial*.npz)")
     p.add_argument("--basis", default=None,
-                   help="fixed-peak basis directory (default: '<analysis_outdir>_basis')")
+                   help="fixed-peak basis directory (default: the run's '<base>_basis' sibling)")
     p.add_argument("--space", choices=("cdf", "w"), default="cdf",
                    help="response space (default cdf: exactly linear in mixtures; "
                         "'w' reproduces the original behaviour)")
@@ -66,8 +65,16 @@ def main(argv=None) -> int:
             f"{outdir} is a BASIS directory (it contains basis_info.json), but the "
             "positional argument must be the ANALYSIS directory (the one holding "
             "Trial*/ subdirectories). Pass the analysis directory; the basis is "
-            "found automatically at '<analysis>_basis' or via --basis.")
-    basis = args.basis or f"{outdir}_basis"
+            "found automatically from the run's base name or via --basis.")
+    # current layout: <base>_analysis / _summary / _basis siblings; directories
+    # from before the run-base naming keep their old '<analysis>_basis' sibling
+    # and 'summary/' subdirectory.
+    if outdir.endswith("_analysis"):
+        base = outdir[: -len("_analysis")]
+        default_basis, summary_dir = f"{base}_basis", f"{base}_summary"
+    else:
+        default_basis, summary_dir = f"{outdir}_basis", os.path.join(outdir, "summary")
+    basis = args.basis or default_basis
     if not os.path.isdir(basis):
         raise SystemExit(f"Basis directory not found: {basis}\n"
                          f"Build it first:  pyleader-basis <pop_id> ... --outdir {basis}")
@@ -91,7 +98,6 @@ def main(argv=None) -> int:
         res = unfold(W_obs, resp, n_ensemble=args.n_ensemble, seed=args.seed)
         space_label = "W"
 
-    summary_dir = os.path.join(outdir, "summary")
     os.makedirs(summary_dir, exist_ok=True)
     npz = os.path.join(summary_dir, "population_distribution.npz")
     png = os.path.join(summary_dir, "population_distribution.png")

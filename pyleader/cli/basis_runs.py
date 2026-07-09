@@ -90,7 +90,7 @@ def main(argv=None) -> int:
     else:
         from pyleader.analysis import diameter_matched_files
         geom = diameter_matched_files(pc.analysis_config())
-        outdir = a.outdir or f"{pc.analysis_config().outdir}_basis"
+        outdir = a.outdir or f"{pc.analysis_config().run_base}_basis"
 
     if not geom:
         raise SystemExit("No .obs geometry files found for the basis.")

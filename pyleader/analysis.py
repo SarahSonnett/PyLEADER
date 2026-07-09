@@ -86,7 +86,11 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
         shutil.rmtree(outdir)
         os.mkdir(outdir)
 
-    summary_dir = f"{outdir}/summary"
+    # headline products live in a sibling directory (re-running the analysis
+    # rebuilds both; the expensive _biasmap/_basis siblings are never wiped)
+    summary_dir = cfg.summary_outdir
+    if cfg.overwrite and os.path.isdir(summary_dir):
+        shutil.rmtree(summary_dir)
     os.makedirs(summary_dir, exist_ok=True)
 
     Ndraws = cfg.Ndraws
@@ -197,9 +201,9 @@ def run_analysis(cfg: AnalysisConfig, *, seed: int | None = None, show: bool = F
         log_path, unpack=True, dtype=float, usecols=(0, 1, 2, 3)
     )
     plot_alltrials(betamax_all, "Peak of " + r"$\beta$" + " distribution",
-                   f"Summary_betamax_Famid{famid}_{cfg.diam_tag}", summary_dir, show=show)
+                   f"Analysis_betamax_Famid{famid}_{cfg.diam_tag}", summary_dir, show=show)
     plot_alltrials(pmax_all, "Peak of p distribution",
-                   f"Summary_pmax_Famid{famid}_{cfg.diam_tag}", summary_dir, show=show)
+                   f"Analysis_pmax_Famid{famid}_{cfg.diam_tag}", summary_dir, show=show)
 
     # population-level marginal DFs of p and beta (DF_p_all/DF_b_all .png + .txt)
     plot_population_df(outdir, cfg, show=show)

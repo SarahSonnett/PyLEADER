@@ -161,6 +161,22 @@ class Posterior:
                                    self.b_lo95, self.b_hi95]),
                  multimodal=self.multimodal, n_modes=self.n_modes)
 
+    @classmethod
+    def load(cls, path: str) -> "Posterior":
+        """Reload a saved ``posterior_{peak,median}.npz`` — e.g. to re-render the
+        figure with modified titles/labels via :func:`plot_posterior`, without
+        re-running any simulation."""
+        d = np.load(path)
+        ps, bs = d["p_stats"], d["b_stats"]
+        return cls(p_grid=d["p_grid"], b_grid=d["b_grid"], density=d["density"],
+                   observed=tuple(float(x) for x in d["observed"]),
+                   p_map=float(ps[0]), b_map=float(bs[0]),
+                   p_median=float(ps[1]), p_lo68=float(ps[2]), p_hi68=float(ps[3]),
+                   p_lo95=float(ps[4]), p_hi95=float(ps[5]),
+                   b_median=float(bs[1]), b_lo68=float(bs[2]), b_hi68=float(bs[3]),
+                   b_lo95=float(bs[4]), b_hi95=float(bs[5]),
+                   multimodal=bool(d["multimodal"]), n_modes=int(d["n_modes"]))
+
 
 def _interval(grid, marg, frac):
     """Central credible interval [lo, hi] of a 1-D marginal at probability `frac`."""

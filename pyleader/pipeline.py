@@ -137,8 +137,9 @@ class PopulationConfig:
 @dataclass
 class PopulationResult:
     pop_id: str
-    outdir: str
+    outdir: str                            # the analysis directory
     recovered: tuple                       # (p, beta_deg) LEADER peak, averaged over trials
+    summary_dir: str = None                # headline products (report, corrections, posteriors)
     corrected: Optional[tuple] = None      # quadratic correction (p, beta_deg), if run
     correction_path: Optional[str] = None
     bias_map_csv: Optional[str] = None
@@ -191,21 +192,25 @@ def _recovered_peak(analysis_outdir: str, acfg: AnalysisConfig):
     Falls back to the legacy ``SummaryAnalysis_*.txt`` for analysis directories
     written before the two files were merged (2026-07-09).
     """
-    log = os.path.join(analysis_outdir, "summary", "analysis.log")
-    try:
-        pmax, betamax = np.genfromtxt(log, unpack=True, usecols=(1, 2), dtype=float)
+    candidates = (
+        (os.path.join(acfg.summary_outdir, "analysis.log"), 0),
+        (os.path.join(analysis_outdir, "summary", "analysis.log"), 0),  # pre-sibling layout
+        (os.path.join(analysis_outdir, "summary",
+                      f"SummaryAnalysis_Famid{acfg.famid}_{acfg.diam_tag}.txt"), 1),
+    )
+    for path, skip in candidates:
+        try:
+            pmax, betamax = np.genfromtxt(path, unpack=True, usecols=(1, 2),
+                                          dtype=float, skip_header=skip)
+        except OSError:
+            continue
         pmax, betamax = np.atleast_1d(pmax), np.atleast_1d(betamax)
-        ok = np.isfinite(pmax) & np.isfinite(betamax)  # tolerate legacy non-'#' header rows
-    except OSError:
-        ok = np.zeros(0, dtype=bool)
-    if not ok.any():
-        legacy = os.path.join(analysis_outdir, "summary",
-                              f"SummaryAnalysis_Famid{acfg.famid}_{acfg.diam_tag}.txt")
-        pmax, betamax = np.genfromtxt(legacy, unpack=True, usecols=(1, 2),
-                                      dtype=float, skip_header=1)
-        pmax, betamax = np.atleast_1d(pmax), np.atleast_1d(betamax)
-        ok = np.isfinite(pmax) & np.isfinite(betamax)
-    return float(pmax[ok].mean()), float(betamax[ok].mean())
+        ok = np.isfinite(pmax) & np.isfinite(betamax)  # tolerate legacy header rows
+        if ok.any():
+            return float(pmax[ok].mean()), float(betamax[ok].mean())
+    raise FileNotFoundError(
+        f"No per-trial results table found for {analysis_outdir} "
+        "(analysis.log in the summary dir).")
 
 
 def run_population(cfg: PopulationConfig, *, do_build: bool = False,
@@ -237,7 +242,7 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     outdir = run_analysis(acfg, seed=seed)
     rec_p, rec_b = _recovered_peak(outdir, acfg)
 
-    summary_dir = os.path.join(outdir, "summary")
+    summary_dir = acfg.summary_outdir          # sibling of the analysis dir
     os.makedirs(summary_dir, exist_ok=True)
 
     geom = diameter_matched_files(acfg)
@@ -247,14 +252,15 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
               f"from {len(geom)} .obs files ...")
         noise = fit_population_noise(geom, docdir=summary_dir, label=f"[{cfg.pop_id}] ")
     base_syn = cfg.synthetic_base(geom, noise_model=noise)
-    result = PopulationResult(pop_id=cfg.pop_id, outdir=outdir, recovered=(rec_p, rec_b))
+    result = PopulationResult(pop_id=cfg.pop_id, outdir=outdir, summary_dir=summary_dir,
+                              recovered=(rec_p, rec_b))
     coeffs = None
 
     # 3a–5a. quadratic correction: bias map -> fit -> apply
     if cfg.correction_method in ("quadratic", "both"):
         print(f"[{cfg.pop_id}] determining the bias map from {len(geom)} population geometries ...")
-        # simulations live OUTSIDE the analysis dir (re-running the analysis wipes it)
-        biasmap_dir = f"{outdir}_biasmap"
+        # simulations live in their own sibling (never wiped by analysis re-runs)
+        biasmap_dir = f"{acfg.run_base}_biasmap"
         biasmap_csv = run_bias_map(base_syn, cfg.p_peaks, cfg.b_peaks,
                                    nseeds=cfg.bias_map_nseeds, seed=(seed or 0),
                                    outdir=biasmap_dir)
@@ -282,7 +288,7 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
         from .synthetic.posterior import (build_forward_table, posterior_correct,
                                           plot_posterior, recovered_stat_from_analysis)
 
-        basis_dir = cfg.basis_dir or f"{outdir}_basis"
+        basis_dir = cfg.basis_dir or f"{acfg.run_base}_basis"
         print(f"[{cfg.pop_id}] posterior correction: fixed-peak basis at {basis_dir}")
         p_grid = np.linspace(cfg.basis_p_range[0], cfg.basis_p_range[1], cfg.basis_np)
         b_grid = np.deg2rad(np.linspace(cfg.basis_b_range_deg[0],
@@ -306,10 +312,10 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
                                                  next(iter(result.posteriors.values())))
         result.basis_dir = basis_dir
 
-    noise_note = ("empirical flux-fluxerr fit (see summary/noise_model.json)"
+    noise_note = ("empirical flux-fluxerr fit (see the summary dir's noise_model.json)"
                   if noise is not None else
                   f"flat {100 * base_syn.noise_level:.0f}% Gaussian")
-    _write_report(cfg, outdir, (rec_p, rec_b), result.corrected, coeffs,
+    _write_report(cfg, summary_dir, (rec_p, rec_b), result.corrected, coeffs,
                   getattr(result, "posteriors", None), noise_note=noise_note)
 
     msg = f"[{cfg.pop_id}] recovered (p={rec_p:.3f}, β={rec_b:.1f}°)"
@@ -326,9 +332,9 @@ def run_population(cfg: PopulationConfig, *, do_build: bool = False,
     return result
 
 
-def _write_report(cfg, outdir, recovered, corrected=None, coeffs=None, posteriors=None,
+def _write_report(cfg, summary_dir, recovered, corrected=None, coeffs=None, posteriors=None,
                   noise_note=None):
-    with open(os.path.join(outdir, "summary", "population_report.txt"), "w") as f:
+    with open(os.path.join(summary_dir, "population_report.txt"), "w") as f:
         f.write(f"# Population pipeline report: {cfg.pop_id} ({cfg.population_kind})\n")
         f.write(f"# catalog={cfg.cat} filter={cfg.filterpriority} "
                 f"diam=[{cfg.diam_low},{cfg.diam_high}] km  Ntrials={cfg.Ntrials} Ndraws={cfg.Ndraws}\n")

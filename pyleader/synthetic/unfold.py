@@ -126,6 +126,19 @@ class UnfoldResult:
                  pop_median_b=np.array([self.pop_median_b, self.pop_median_b_lo,
                                         self.pop_median_b_hi]))
 
+    @classmethod
+    def load(cls, path: str) -> "UnfoldResult":
+        """Reload a saved ``population_distribution.npz`` — e.g. to re-render the
+        figure with modified titles/labels via :func:`plot_unfolded`, without
+        re-running any simulation."""
+        d = np.load(path)
+        mp, mb = d["pop_median_p"], d["pop_median_b"]
+        return cls(d["p_grid"], d["b_grid"], d["f_mean"], d["f_lo"], d["f_hi"],
+                   float(d["alpha"]), float(d["relerr"]),
+                   pop_median_p=float(mp[0]), pop_median_p_lo=float(mp[1]),
+                   pop_median_p_hi=float(mp[2]), pop_median_b=float(mb[0]),
+                   pop_median_b_lo=float(mb[1]), pop_median_b_hi=float(mb[2]))
+
 
 def _smoothness_operator(np_, nb):
     """First-difference operator over the true (p, beta) grid (both directions)."""

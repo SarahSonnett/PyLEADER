@@ -164,7 +164,7 @@ def plot_alltrials(dist: np.ndarray, ttle: str, pltname: str, outdir: str, *, sh
     plt.plot(x, y, "r--", linewidth=2)
 
     plt.xlabel(ttle)
-    plt.ylabel("Probability")
+    plt.ylabel("Probability density")
     plt.title(r"$\mathrm{Peak, Width\ of\ Gaussian\ fit: }\ \mu=%.3f,\ \sigma=%.3f$" % (mu, sigma))
     plt.grid(True)
     plt.savefig(f"{outdir}/{pltname}.png", dpi=300)
@@ -179,7 +179,8 @@ def _population_counts(outdir: str, cfg: AnalysisConfig):
     Falls back to the legacy ``SummaryAnalysis_*.txt`` for analysis directories
     written before the two files were merged (2026-07-09).
     """
-    for path, skip in ((f"{outdir}/summary/analysis.log", 0),
+    for path, skip in ((f"{cfg.summary_outdir}/analysis.log", 0),
+                       (f"{outdir}/summary/analysis.log", 0),                # pre-sibling layout
                        (f"{outdir}/summary/SummaryAnalysis_Famid{cfg.famid}_{cfg.diam_tag}.txt", 1)):
         try:
             nobj, npoints = np.genfromtxt(path, unpack=True, usecols=(4, 5),
@@ -218,8 +219,10 @@ def plot_population_df(outdir: str, cfg: AnalysisConfig, *, show: bool = False) 
              + f"{round(npoints, 2)} data points per object")
 
     for quant, grid, dfs, faint, medc, medfmt, xlabel, png, txt in (
-        ("p", P, DFP, "0.65", "k", "-", "b:a axis ratio", "DF_p_all", "DF_p_all.txt"),
-        ("b", B, DFB, "lightskyblue", "b", "-.", "Spin pole polar angle (degrees)", "DF_b_all", "DF_b_all.txt"),
+        ("p", P, DFP, "0.65", "k", "-", "b:a axis ratio",
+         "Analysis_AllTrials_p_distribution", "Analysis_AllTrials_p_distribution.txt"),
+        ("b", B, DFB, "lightskyblue", "b", "-.", "Spin pole polar angle (degrees)",
+         "Analysis_AllTrials_b_distribution", "Analysis_AllTrials_b_distribution.txt"),
     ):
         # drop bins that are all-NaN across trials (the padded p tail); this also
         # tolerates the older truncated 20-row files transparently.
@@ -238,12 +241,12 @@ def plot_population_df(outdir: str, cfg: AnalysisConfig, *, show: bool = False) 
         plt.xlabel(xlabel)
         plt.ylabel("Density function")
         plt.tight_layout()
-        plt.savefig(f"{outdir}/summary/{png}.png", dpi=300)
+        plt.savefig(f"{cfg.summary_outdir}/{png}.png", dpi=300)
         if show:
             plt.show()
         plt.close()
 
-        with open(f"{outdir}/summary/{txt}", "w+") as outfile:
+        with open(f"{cfg.summary_outdir}/{txt}", "w+") as outfile:
             outfile.write(f"{int(nobj)} {round(npoints, 2)}\n")
             for i in range(len(med)):
                 outfile.write("%1.2f  %1.3f  %1.3f\n" % (med[i], med_df[i], err[i]))

@@ -104,13 +104,15 @@ The pipeline flows in steps. `pyleader-population` runs steps **3–6** in one c
          │
    [3] pyleader-analysis             LEADER inversion → recovered (p, β) + spread
          │
-   [4] pyleader-bias-map             determine the bias map on THIS population's geometry
+   [4a] pyleader-bias-map            determine the bias map on THIS population's geometry
          │
-   [5] pyleader-fit-correction       fit recovered→true quadratic_correction.json
+   [5a] pyleader-fit-correction      fit recovered→true quadratic_correction.json
          │
-   [6] apply                         corrected (p, β) → population_report.txt
+   [6a] apply                        corrected (p, β) → population_report.txt
 
-   └── pyleader-population wraps [3]–[6] (and [2] with --build) ──┘
+   [4b–6b] posterior correction + population distribution (same rank as 4a–6a; both run by default)
+
+   └── pyleader-population wraps [3]–[6a] + [4b–5b] (and [2] with --build) ──┘
 ```
 
 
@@ -199,7 +201,7 @@ performs the **core LEADER analysis** — the regularized inversion of the poole
 statistics — over `ntrials` random draws of the population, writing the recovered `(p, β)`
 distributions with their trial-to-trial spread. Note that this step produces the **raw** recovered
 distributions only: it does not assess the systematic bias or model the uncertainties. The full
-Steps 3–6 chain is needed for bias-corrected results.
+Steps 3–6a / 4b–6b chain is needed for bias-corrected results.
 - **`ndraws` vs `ntrials`:** one *trial* = draw `ndraws` objects at random (with replacement) from
   the population's `.obs` files, pool their lightcurve amplitudes into a single CDF, and run one
   LEADER inversion on it. `ndraws` therefore sets the *statistical size of each sample*, while
@@ -233,17 +235,20 @@ Steps 3–6 chain is needed for bias-corrected results.
   (`trial k/N (xx%)`); the full run record — configuration, per-trial results, and timestamps —
   is written to `analysis.log` inside the output directory.
 - **Output:**
-  - `<...>_analysis_<...>_<lo>km_to_<hi>km/` with the per-`Trial*/` diagnostics and a `summary/`
-    subdirectory holding the headline products: `analysis.log` (the run's configuration header
-    plus one row per trial: Pmax, Betamax, Relerr, N_obj, AvgPointsPerObj, N_apparitions_total —
-    the `#` header lines make it directly readable with `np.genfromtxt`),
-    `Summary_pmax/betamax_Famid<id>_<lo>km_to_<hi>km.png`, and the population marginal DFs
-    (`DF_p_all`, `DF_b_all` `.png`/`.txt`). The command prints the output directory when it
-    finishes.
+  - two sibling directories sharing the run's base name
+    `<Fam|BG...><id>_<cat>_<filter>_<lo>km_to_<hi>km`:
+    - `<base>_analysis/` — the per-`Trial*/` diagnostics
+    - `<base>_summary/` — the headline products: `analysis.log` (the run's configuration header
+      plus one row per trial: Pmax, Betamax, Relerr, N_obj, AvgPointsPerObj,
+      N_apparitions_total — the `#` header lines make it directly readable with
+      `np.genfromtxt`), the `Analysis_pmax/betamax_Famid<id>_*.png` peak histograms, and the
+      across-trial marginal distributions (`Analysis_AllTrials_p_distribution`,
+      `Analysis_AllTrials_b_distribution` `.png`/`.txt`). The command prints the output
+      directory when it finishes.
 
 
 
-### Step 4 — Determine the bias map
+### Step 4a — Determine the bias map
 
 ```sh
 pyleader-bias-map                  # inside a virtual environment
@@ -303,7 +308,7 @@ across a grid of assigned peaks.
 - **`pyleader-bias-map` vs `pyleader-spot-check`:** the **bias map** runs one synthetic experiment per
   point of an assigned `(p_peak, β_peak)` **grid** (× `nseeds` realizations) and tabulates the
   results — its purpose is to *map the recovery bias across parameter space*, producing the table
-  the Step-5 correction is fit from. **`pyleader-spot-check`** runs a **single** experiment at one
+  the Step-5a correction is fit from. **`pyleader-spot-check`** runs a **single** experiment at one
   assigned `(p, β)` and keeps that run's full diagnostics — its purpose is *inspection*: spot-check
   how well LEADER recovers one assigned distribution, debug scattering/geometry choices, or
   illustrate the method. The bias map calls the same single-run machinery internally.
@@ -331,14 +336,14 @@ across a grid of assigned peaks.
   - `--seed N`
 - **Output:**
   - `bias_map_stats.csv` (one row per grid point × seed: min/max/mean/median of assigned vs. recovered
-    `p`, `β`). CSV rather than plain text because it is the machine-readable input to Step 5, read
+    `p`, `β`). CSV rather than plain text because it is the machine-readable input to Step 5a, read
     by column name; it also opens directly in Excel/pandas.
   - `bias_map_summary.png` — `pyleader-plot-bias-map <csv>` re-renders the summary
   - per-grid-point subdirectories named `trial<i>_p<P>_b<B>deg/` with the single-run diagnostics
 
 
 
-### Step 5 — Fit the correction
+### Step 5a — Fit the correction
 
 ```sh
 pyleader-fit-correction           # inside a virtual environment
@@ -349,7 +354,7 @@ python scripts/fit_correction.py  # outside a virtual environment
 fits the recovered→true mapping (a 2-D quadratic in recovered `p`, `β`) from a
 bias-map CSV — the correction to apply to real LEADER output.
 - **Input:**
-  - a `bias_map_stats.csv` from Step 4
+  - a `bias_map_stats.csv` from Step 4a
 - **Arguments:**
   - `csv` path *(required)*
   - `--stat {peak,mean,median}` which statistic to correct *(default* `mean`*; the pipeline uses* `peak`*, matching LEADER's reported pmax/betamax)*
@@ -370,7 +375,7 @@ $$\beta_{\rm corr} = d_0 + d_1 p + d_2 \beta + d_3 p^2 + d_4\, p\beta + d_5 \bet
 
 
 
-### Step 6 — Apply the correction
+### Step 6a — Apply the correction
 
 Apply a fitted (or the shipped default) correction to real LEADER output:
 
@@ -388,13 +393,13 @@ L1/L2/L∞ distances between two recovered distributions.
 
 ### Steps 4b–6b — Probabilistic correction (credible intervals) & unfolding
 
-The quadratic correction of Steps 4–6 maps a recovered peak to a **single** corrected value — but
+The quadratic correction of Steps 4a–6a maps a recovered peak to a **single** corrected value — but
 the p–β degeneracy (e.g. a sphere at β=0 vs. an elongated object seen pole-on) makes the
 recovered→true mapping many-to-one, and the quadratic silently picks one answer. The probabilistic
 path replaces it with a Bayesian inversion of a sampled forward model.
 
 The two corrections are **fundamentally different and independent**: the quadratic is a
-deterministic least-squares surface fit to the bias-map means (Steps 4–5), while the posterior
+deterministic least-squares surface fit to the bias-map means (Steps 4a–5a), while the posterior
 inverts a separately simulated fixed-peak forward model (Steps 4b–5b) — different simulations,
 different mathematics, no shared fitted parameters. That independence is exactly why the pipeline
 runs **both by default** (`--correction-method both`): when two unrelated estimators land on
@@ -496,10 +501,10 @@ probability. When the ridge breaks into disjoint islands, the multimodality flag
   - `--basis-dir PATH` / `--basis-nseeds N` / `--basis-nproc N` control the underlying basis
     (see Step 4b and "The whole pipeline")
 - **Output:**
-  - `summary/posterior_correction_{peak,median}.png` (one figure per channel)
-  - `summary/posterior_{peak,median}.npz` (the posterior density + statistics)
+  - `<base>_summary/posterior_correction_{peak,median}.png` (one figure per channel)
+  - `<base>_summary/posterior_{peak,median}.npz` (the posterior density + statistics)
   - per-channel blocks and the peak-vs-median consistency line in
-    `summary/population_report.txt`
+    `<base>_summary/population_report.txt`
 - **Assumption:** the posterior is calibrated on fixed-peak populations, so its meaning is
   conditional on the underlying population being approximately **single-peaked**. For strongly
   skewed or multimodal populations 'the peak' itself is ill-defined — the multimodality flag and
@@ -544,7 +549,7 @@ pyleader-unfold <analysis_outdir> --basis <analysis_outdir>_basis
   - `--n-ensemble N` perturbation re-solves for the error bands *(default 40)*
   - `--seed N`
 - **Output:**
-  - `summary/population_distribution.npz` + `.png` (joint map + marginals with 16–84% bands)
+  - `<base>_summary/population_distribution.npz` + `.png` (joint map + marginals with 16–84% bands)
 
 ### The whole pipeline
 
@@ -553,7 +558,7 @@ pyleader-population               # inside a virtual environment
 python scripts/run_population.py  # outside a virtual environment
 ```
 
-Runs steps 3–6 for one population, deriving the correction from **that population's own** `.obs`
+Runs the whole chain — steps 3–6a plus the probabilistic 4b–5b — for one population, deriving the correction from **that population's own** `.obs`
 **observing geometry** (the scientifically appropriate choice, since the geometry — hence the bias —
 differs per dataset):
 
@@ -570,10 +575,10 @@ pyleader-population BG_IB_Ctypes --build
 - **Arguments:**
   - the positional population `ID` *(required)*
   - the Step-3 analysis options (`--diam-low/-high`, `--ntrials`, `--ndraws`, `--phase-angle-limit`, `--date-tol`, `--wanted`)
-  - the Step-4 bias-map options (`--p-peaks`, `--b-peaks`, `--bias-map-ndraws`, `--bias-map-nseeds`, `--scattering`)
+  - the Step-4a bias-map options (`--p-peaks`, `--b-peaks`, `--bias-map-ndraws`, `--bias-map-nseeds`, `--scattering`)
   - `--noise-model {empirical,flat}` synthetic photometric noise *(default* `empirical`*: the
     population's own flux–fluxerr relation, calibrated to the measured epoch-to-epoch
-    repeatability and applied point by point; see Step 4)*
+    repeatability and applied point by point; see Step 4a)*
   - `--correction-stat {peak,mean,median}` *(default* `peak`*)*
   - `--correction-method {quadratic,posterior,both}` which correction(s) to derive *(default*
     `both`*; posterior auto-builds/resumes the Step-4b fixed-peak basis)*
@@ -593,18 +598,19 @@ pyleader-population BG_IB_Ctypes --build
   fixed-peak basis dominates — ~40 min at the default 12×12 × 4 seeds, ~78 min at 8 seeds. The
   corrections, posteriors, and report add seconds. **End-to-end: ~50–90 min** depending on
   `--basis-nseeds`; everything scales linearly with trials, draws, and basis units.
-- **Output:**
-  - the analysis directory `<...>_analysis_<...>/` with the per-`Trial*/` diagnostics and a
-    **`summary/`** subdirectory holding every headline product in one place:
-    `population_report.txt`, `analysis.log` (configuration + the per-trial results table), the
-    `Summary_pmax/betamax_*.png` histograms, `DF_p_all`/`DF_b_all`, the fitted noise model
+- **Output:** four sibling directories sharing one base name (they sort together in the
+  working dir; re-running the analysis rebuilds the first two and never touches the expensive,
+  reusable simulation libraries):
+  - **`<base>_summary/`** — every headline product in one place: `population_report.txt`,
+    `analysis.log` (configuration + the per-trial results table), the
+    `Analysis_pmax/betamax_*.png` peak histograms,
+    `Analysis_AllTrials_{p,b}_distribution.png`/`.txt`, the fitted noise model
     (`noise_model.json` + `noise_model_fit.png`), the quadratic correction
     (`quadratic_correction.json` + `quadratic_correction_fit.png` + `bias_map_summary.png`), the
     posterior products (`posterior_correction_{peak,median}.png` + npz), and — after
     `pyleader-unfold` — `population_distribution.png`/`.npz`.
-  - the simulation libraries live **outside** the analysis directory as siblings —
-    `<...>_biasmap/` and `<...>_basis/` — because re-running the analysis wipes its own
-    directory, and these libraries are expensive and reusable.
+  - `<base>_analysis/` — the per-`Trial*/` diagnostics
+  - `<base>_biasmap/` and `<base>_basis/` — the simulation libraries
 
 
 
@@ -670,6 +676,25 @@ if __name__ == "__main__":   # required: the parallel basis uses multiprocessing
     print(result.posterior.p_median, result.posterior.b_median)  # posterior (median channel)
 ```
 
+Saved figures can be **re-rendered without re-running anything** — the `.npz` products carry
+everything the plots need, so publication tweaks (titles, labels, fonts) never cost a
+simulation:
+
+```python
+from pyleader.synthetic.posterior import Posterior, plot_posterior
+from pyleader.synthetic.unfold import UnfoldResult, plot_unfolded
+
+post = Posterior.load("<base>_summary/posterior_median.npz")
+plot_posterior(post, "posterior_for_paper.png", stat="median")
+
+dist = UnfoldResult.load("<base>_summary/population_distribution.npz")
+plot_unfolded(dist, "distribution_for_paper.png", space="CDF")
+```
+
+The plot functions are short matplotlib wrappers ([posterior.py](pyleader/synthetic/posterior.py),
+[unfold.py](pyleader/synthetic/unfold.py)) — for full control of titles and axis labels, copy one
+into your own script and edit it, passing the loaded object in.
+
 > **Note:** wrap library calls that reach the parallel basis (`run_population` with the posterior
 > enabled, or `run_basis`) in the `if __name__ == "__main__":` guard — Python's `spawn`
 > multiprocessing re-imports your script in each worker, and without the guard your script's
@@ -678,63 +703,63 @@ if __name__ == "__main__":   # required: the parallel basis uses multiprocessing
 
 
 
-## Example: the Hygiea family
+## Worked example: the 3556 (Lixiaohua) family
 
-The figures below are for the **Hygiea family** (family 10; 3–5 km diameter range). The per-trial
-and summary diagnostics come from a 100-trial LEADER analysis.
-
-**Per-trial diagnostics.** The inversion fits the cumulative distribution of light-curve amplitudes
-`A`; the relative error measures how well the reconstructed CDF (∑ wᵢⱼFᵢⱼ) matches the observed one.
-The solved occupation numbers `w` over the `(p, β)` grid, and the smoothed joint distribution:
-
-![Fit of the amplitude CDF](docs/images/RelativeError.png)
-![Occupation numbers over (p, beta)](docs/images/OccupationNumbers_w.png)
-![Smoothed joint distribution f(p, beta)](docs/images/Solutions_smoothed.png)
-
-**Population summaries (across all trials).** The peak of the shape (`p`) and spin-axis (`β`)
-distributions over all trials, each with a Gaussian fit giving the population value and its spread:
-
-![Distribution of p peaks](docs/images/Summary_pmax.png)
-![Distribution of beta peaks](docs/images/Summary_betamax.png)
-
-**Per-population bias correction.** Running the full pipeline on this dataset
+Everything below is **one run** on a single dataset — the 5–10 km members of family 3556
+(362 objects), analyzed end-to-end with the package defaults (100 trials × 1000 draws;
+12×12 basis × 8 seeds over `p ∈ [0.30, 0.95]`; empirical photometric noise calibrated to the
+measured epoch-to-epoch repeatability):
 
 ```sh
-pyleader-population 10 --diam-low 3 --diam-high 5 --ntrials 100 --bias-map-nseeds 3
+pyleader-population 3556 --diam-low 5 --diam-high 10 --basis-nseeds 8
+pyleader-unfold <base>_analysis      # after the pipeline; <base> is printed when it finishes
 ```
 
-derives a correction from Hygiea's *own* observing geometry: a bias map over assigned
-`(p_peak, β_peak)` values (20 grid points × 3 seeds) observed at the family's cadence. The
-**bias-map summary** shows how LEADER's
-recovered means (colored, ±1σ over seeds) depart from the assigned truth (dashed) as a function of
-each input parameter — making the direction of the bias and the `p`–`β` interdependence explicit:
+(Wall time for this run: ~87 min — ~5 min analysis, ~3 min bias map, ~78 min basis.)
 
-![Hygiea bias-map summary: recovered vs assigned p and beta](docs/images/Hygiea_bias_map_summary.png)
+**Step 3 — per-trial diagnostics.** The inversion fits the cumulative distribution of light-curve
+amplitudes `A`; the relative error measures how well the reconstructed CDF (∑ wᵢⱼFᵢⱼ) matches the
+observed one. The solved occupation numbers `w` over the `(p, β)` grid, and the smoothed joint
+distribution:
 
-`p` is recovered biased low everywhere, and by *more* at low spin latitude (the blue `β_peak=11°`
-curve sits farthest below the diagonal); `β` is compressed toward mid-range (over-estimated below
-~50°, under-estimated above), nearly independent of `p_peak`. Fitting a recovered→true mapping to
-these points recovers the assigned peaks well (R² = 0.93 for both `p` and `β`):
+![Fit of the amplitude CDF](docs/images/Fam3556_RelativeError.png)
+![Occupation numbers over (p, beta)](docs/images/Fam3556_OccupationNumbers_w.png)
+![Smoothed joint distribution f(p, beta)](docs/images/Fam3556_Solutions_smoothed.png)
 
-![Hygiea correction fit: corrected vs true p and beta](docs/images/Hygiea_quadratic_correction_fit.png)
+**Step 3 — across all trials.** The peak of the shape (`p`) and spin-axis (`β`) distributions
+over the 100 trials, each with a Gaussian fit giving the raw (uncorrected) population value and
+its trial-to-trial spread:
 
-Applying it de-biases the LEADER result for the population (`population_report.txt`):
+![Distribution of p peaks](docs/images/Fam3556_Analysis_pmax.png)
+![Distribution of beta peaks](docs/images/Fam3556_Analysis_betamax.png)
+
+**Steps 4a–6a — bias map and quadratic correction.** The bias map observes synthetic populations
+of assigned `(p_peak, β_peak)` (20 grid points) at this family's *own* cadence, geometry, and
+noise. The summary shows how LEADER's recovered means (colored) depart from the assigned truth
+(dashed) — making the direction of the bias and the `p`–`β` interdependence explicit:
+
+![Fam3556 bias-map summary: recovered vs assigned p and beta](docs/images/Fam3556_bias_map_summary.png)
+
+`p` is recovered biased low everywhere, and by *more* at low spin latitude (the `β_peak = 10°`
+curve sits farthest below the diagonal) — photometric noise inflates the apparent brightness
+variation, and low-latitude geometries compound it. `β` is compressed toward mid-range
+(over-estimated below ~45°, under-estimated above), nearly independently of `p_peak`. Fitting the
+recovered→true quadratic to these points gives the Step-5a correction (R²: 0.69 in `p`, 0.91 in
+`β`):
+
+![Fam3556 correction fit: corrected vs true p and beta](docs/images/Fam3556_quadratic_correction_fit.png)
+
+Applying it de-biases the LEADER result (`population_report.txt`):
 
 
-| quantity  | recovered | corrected |
-| --------- | --------- | --------- |
-| `p`       | 0.497     | **0.642** |
-| `β` (deg) | 30.4      | **3.1**   |
+| quantity  | recovered | quadratic-corrected |
+| --------- | --------- | ------------------- |
+| `p`       | 0.492     | **0.618**           |
+| `β` (deg) | 38.5      | **31.5**            |
 
 
-As the bias map predicts, `p` is corrected upward, and `β` — only weakly constrained by amplitudes and
-here near the low edge of the synthetic recovered range (`β_rec ∈ [28°, 90°]`) — shifts toward the
-pole; the report flags such near/out-of-range cases as uncertain.
-
-**Posterior correction (family 3556).** The probabilistic products are best read off an example.
-Below is the median-channel posterior for family 3556 (5–10 km members, 100 trials, and the
-package defaults throughout: a 12×12 basis × 8 seeds over `p ∈ [0.30, 0.95]`, with empirical
-photometric noise calibrated to the measured epoch-to-epoch repeatability):
+**Step 5b — posterior correction.** The probabilistic path answers the same question with
+credible intervals. Below is the median-channel posterior from the same run:
 
 ![Family 3556 posterior correction, median channel](docs/images/Fam3556_posterior_correction_median.png)
 
@@ -759,7 +784,13 @@ A possible interpretation, element by element:
   `population_report.txt` (peak vs median channel) guards the single-peak assumption behind
   this figure.
 
-**Population distribution (same run).** `pyleader-unfold` on the same analysis and basis gives
+Note the cross-check the two independent corrections provide: they agree well on `p`
+(quadratic 0.618 vs posterior 0.58 ± 0.03) but differ on `β` (31.5° vs 47° ± 6°) — `β` is the
+noise-sensitive coordinate, the quadratic is a point estimate fit to 20 bias-map runs, and when
+the two paths disagree the posterior's credible interval is the primary statement (see
+Steps 4a–6a vs 4b–6b above).
+
+**Step 6b — population distribution (same run).** `pyleader-unfold` on the same analysis and basis gives
 the complementary product — the estimated spread of the whole population, not just its peak:
 
 ![Family 3556 population distribution, CDF-space unfolding](docs/images/Fam3556_population_distribution.png)

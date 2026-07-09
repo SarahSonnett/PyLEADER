@@ -111,7 +111,7 @@ def main(argv=None) -> int:
         posterior_stat=a.posterior_stat, base_dir=a.base_dir, obsdir=a.obsdir,
     )
     res = run_population(cfg, do_build=a.build, refresh_models=a.refresh_models, seed=a.seed)
-    print(f"\nDone. Report + correction in: {res.outdir}")
+    print(f"\nDone. Report + corrections in: {res.summary_dir}")
     return 0
 
 
