@@ -444,10 +444,11 @@ pyleader-basis 1128 --diam-low 1 --diam-high 100      # 12×12 grid × 4 seeds (
   - `basis_info.json` (grid, seeds, tolerances, and the noise model used)
   - `noise_model.json` + `noise_model_fit.png` (when fit from the geometry files)
 - **Runtime & how many seeds:** wall time ≈ units × (time per unit) ÷ workers, and is exactly
-  linear in grid points × `--nseeds`. A unit costs ≈ 25 s single-core, dominated by the
-  fixed-peak shape sampling (the tight ±0.02 tolerance accepts only ~1 in 14 stretched DAMIT
-  shapes; the parsed models are cached in memory per worker). The default 12×12 grid × 4 seeds
-  (576 units) is therefore **~30–40 min** on 8 workers (× 8 seeds doubles it). The seeds measure
+  linear in grid points × `--nseeds`. A unit costs ≈ 33 s single-core (measured on family 3556,
+  5–10 km, M3 Max), dominated by the fixed-peak shape sampling (the tight ±0.02 tolerance
+  accepts only ~1 in 14 stretched DAMIT shapes; the parsed models are cached in memory per
+  worker). The default 12×12 grid × 4 seeds (576 units) is therefore **~40 min** on 8 workers,
+  and × 8 seeds ≈ 80 min (measured: 1152 units in 78 min). The seeds measure
   the *scatter* of the recovery,
   and the scatter estimate improves as $1/\sqrt{2(n_{\rm seeds}-1)}$: **4 seeds** → known to ~±40%
   (fine for exploration), **8–10** → ~±25% (recommended for publication-grade credible intervals),
@@ -587,6 +588,11 @@ pyleader-population BG_IB_Ctypes --build
   - `--base-dir PATH`
   - `--obsdir DIR` read/write `.obs` from an exact directory (the bias map's geometry follows it)
   - `--seed N`
+- **Runtime** (measured: family 3556, 5–10 km cut, 362 objects, M3 Max, 8 basis workers): the
+  LEADER analysis takes ~5 min (100 trials × 1000 draws), the bias map ~3 min (20 runs), and the
+  fixed-peak basis dominates — ~40 min at the default 12×12 × 4 seeds, ~78 min at 8 seeds. The
+  corrections, posteriors, and report add seconds. **End-to-end: ~50–90 min** depending on
+  `--basis-nseeds`; everything scales linearly with trials, draws, and basis units.
 - **Output:**
   - the analysis directory `<...>_analysis_<...>/` with the per-`Trial*/` diagnostics and a
     **`summary/`** subdirectory holding every headline product in one place:
@@ -726,19 +732,20 @@ here near the low edge of the synthetic recovered range (`β_rec ∈ [28°, 90°
 pole; the report flags such near/out-of-range cases as uncertain.
 
 **Posterior correction (family 3556).** The probabilistic products are best read off an example.
-Below is the median-channel posterior for family 3556 (1–100 km, 100 trials, 8×8 basis × 4
-seeds, empirical photometric noise calibrated to the measured epoch-to-epoch repeatability):
+Below is the median-channel posterior for family 3556 (5–10 km members, 100 trials, and the
+package defaults throughout: a 12×12 basis × 8 seeds over `p ∈ [0.30, 0.95]`, with empirical
+photometric noise calibrated to the measured epoch-to-epoch repeatability):
 
 ![Family 3556 posterior correction, median channel](docs/images/Fam3556_posterior_correction_median.png)
 
 A possible interpretation, element by element:
 
 - The red **×** is what LEADER actually recovered (here the recovered *median* statistic,
-  `p = 0.45`, `β = 38°`). The colored surface answers: *given that recovery, where is the
+  `p = 0.46`, `β = 40°`). The colored surface answers: *given that recovery, where is the
   population's true peak likely to be?* The offset between the × and the probability mass **is**
-  the bias — for this family, LEADER under-reports `p` by ~0.14 and under-reports `β` by ~7°.
+  the bias — for this family, LEADER under-reports `p` by ~0.13 and under-reports `β` by ~7°.
 - The credible contours are compact and **single-peaked**, so this dataset supports a definite
-  statement: *the family's true peak lies at `p = 0.59 ± 0.04`, `β = 45° ± 9°` (68%)* — the
+  statement: *the family's true peak lies at `p = 0.58 ± 0.03`, `β = 47° ± 6°` (68%)* — the
   family is moderately elongated with mid-latitude spins. Had the region been a long diagonal
   ridge or several islands (see the multimodality note in Step 5b), the honest statement would
   instead be "several true populations are consistent with this recovery".
@@ -751,6 +758,21 @@ A possible interpretation, element by element:
   job of the Step-6b population distribution, and the per-channel consistency check in
   `population_report.txt` (peak vs median channel) guards the single-peak assumption behind
   this figure.
+
+**Population distribution (same run).** `pyleader-unfold` on the same analysis and basis gives
+the complementary product — the estimated spread of the whole population, not just its peak:
+
+![Family 3556 population distribution, CDF-space unfolding](docs/images/Fam3556_population_distribution.png)
+
+Reading it: the `p` marginal (middle) is well constrained — the population's elongations
+concentrate around `p ≈ 0.6` with a tail toward rounder shapes, and the population *median*
+object sits at `p ≈ 0.63` (the narrow 16–84% bands are statistical only). Note the consistency
+with — and independence from — the posterior above: the peak of the *distribution* and the
+posterior's *peak location* land in the same place by two unrelated computations. The `β`
+marginal (right) should be read with more caution: the mixture validation shows that `β`
+structure in the *unfolded* product remains degeneracy-limited at NEOWISE noise levels, so its
+monotonic decline toward high latitudes is indicative, not definitive — for a defensible `β`
+statement, quote the posterior's credible interval instead.
 
 ## Package layout
 
