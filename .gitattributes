@@ -1,0 +1,5 @@
+# Keep GitHub's language statistics focused on the package source: the archived
+# notebooks are JSON blobs whose byte count would otherwise dominate Linguist's
+# language detection ("this repo is mostly Jupyter Notebook").
+*.ipynb linguist-vendored
+Jupyter_Notebook_Testbeds/** linguist-vendored
