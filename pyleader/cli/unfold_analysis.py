@@ -61,6 +61,12 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     outdir = args.analysis_outdir.rstrip("/")
+    if os.path.exists(os.path.join(outdir, "basis_info.json")):
+        raise SystemExit(
+            f"{outdir} is a BASIS directory (it contains basis_info.json), but the "
+            "positional argument must be the ANALYSIS directory (the one holding "
+            "Trial*/ subdirectories). Pass the analysis directory; the basis is "
+            "found automatically at '<analysis>_basis' or via --basis.")
     basis = args.basis or f"{outdir}_basis"
     if not os.path.isdir(basis):
         raise SystemExit(f"Basis directory not found: {basis}\n"
