@@ -234,10 +234,12 @@ Steps 3–6 chain is needed for bias-corrected results.
   is written to `analysis.log` inside the output directory.
 - **Output:**
   - `<...>_analysis_<...>_<lo>km_to_<hi>km/` with the per-`Trial*/` diagnostics and a `summary/`
-    subdirectory holding the headline products: `SummaryAnalysis_Famid<id>_<lo>km_to_<hi>km.txt`,
-    `analysis.log`, `Summary_pmax/betamax_Famid<id>_<lo>km_to_<hi>km.png`, and the population
-    marginal DFs (`DF_p_all`, `DF_b_all` `.png`/`.txt`). The command prints the output directory
-    when it finishes.
+    subdirectory holding the headline products: `analysis.log` (the run's configuration header
+    plus one row per trial: Pmax, Betamax, Relerr, N_obj, AvgPointsPerObj, N_apparitions_total —
+    the `#` header lines make it directly readable with `np.genfromtxt`),
+    `Summary_pmax/betamax_Famid<id>_<lo>km_to_<hi>km.png`, and the population marginal DFs
+    (`DF_p_all`, `DF_b_all` `.png`/`.txt`). The command prints the output directory when it
+    finishes.
 
 
 
@@ -588,7 +590,7 @@ pyleader-population BG_IB_Ctypes --build
 - **Output:**
   - the analysis directory `<...>_analysis_<...>/` with the per-`Trial*/` diagnostics and a
     **`summary/`** subdirectory holding every headline product in one place:
-    `population_report.txt`, `SummaryAnalysis_*.txt`, `analysis.log`, the
+    `population_report.txt`, `analysis.log` (configuration + the per-trial results table), the
     `Summary_pmax/betamax_*.png` histograms, `DF_p_all`/`DF_b_all`, the fitted noise model
     (`noise_model.json` + `noise_model_fit.png`), the quadratic correction
     (`quadratic_correction.json` + `quadratic_correction_fit.png` + `bias_map_summary.png`), the

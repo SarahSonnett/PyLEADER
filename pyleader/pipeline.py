@@ -186,10 +186,26 @@ def fit_population_noise(geom_files, docdir=None, label=""):
 
 
 def _recovered_peak(analysis_outdir: str, acfg: AnalysisConfig):
-    """Average LEADER peak (pmax, betamax_deg) across trials from the summary file."""
-    summary = os.path.join(analysis_outdir, "summary", acfg.summary_name)
-    pmax, betamax = np.genfromtxt(summary, unpack=True, usecols=(1, 2), dtype=float, skip_header=1)
-    return float(np.mean(np.atleast_1d(pmax))), float(np.mean(np.atleast_1d(betamax)))
+    """Average LEADER peak (pmax, betamax_deg) across trials from analysis.log.
+
+    Falls back to the legacy ``SummaryAnalysis_*.txt`` for analysis directories
+    written before the two files were merged (2026-07-09).
+    """
+    log = os.path.join(analysis_outdir, "summary", "analysis.log")
+    try:
+        pmax, betamax = np.genfromtxt(log, unpack=True, usecols=(1, 2), dtype=float)
+        pmax, betamax = np.atleast_1d(pmax), np.atleast_1d(betamax)
+        ok = np.isfinite(pmax) & np.isfinite(betamax)  # tolerate legacy non-'#' header rows
+    except OSError:
+        ok = np.zeros(0, dtype=bool)
+    if not ok.any():
+        legacy = os.path.join(analysis_outdir, "summary",
+                              f"SummaryAnalysis_Famid{acfg.famid}_{acfg.diam_tag}.txt")
+        pmax, betamax = np.genfromtxt(legacy, unpack=True, usecols=(1, 2),
+                                      dtype=float, skip_header=1)
+        pmax, betamax = np.atleast_1d(pmax), np.atleast_1d(betamax)
+        ok = np.isfinite(pmax) & np.isfinite(betamax)
+    return float(pmax[ok].mean()), float(betamax[ok].mean())
 
 
 def run_population(cfg: PopulationConfig, *, do_build: bool = False,

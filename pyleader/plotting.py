@@ -174,13 +174,23 @@ def plot_alltrials(dist: np.ndarray, ttle: str, pltname: str, outdir: str, *, sh
 
 
 def _population_counts(outdir: str, cfg: AnalysisConfig):
-    """Median (N_obj, AvgPointsPerObj) across trials, from the summary file."""
-    summary = f"{outdir}/summary/{cfg.summary_name}"
-    try:
-        nobj, npoints = np.genfromtxt(summary, unpack=True, usecols=(4, 5), dtype=float, skip_header=1)
-        return float(np.median(np.atleast_1d(nobj))), float(np.median(np.atleast_1d(npoints)))
-    except (OSError, ValueError):
-        return 0.0, 0.0
+    """Median (N_obj, AvgPointsPerObj) across trials, from analysis.log.
+
+    Falls back to the legacy ``SummaryAnalysis_*.txt`` for analysis directories
+    written before the two files were merged (2026-07-09).
+    """
+    for path, skip in ((f"{outdir}/summary/analysis.log", 0),
+                       (f"{outdir}/summary/SummaryAnalysis_Famid{cfg.famid}_{cfg.diam_tag}.txt", 1)):
+        try:
+            nobj, npoints = np.genfromtxt(path, unpack=True, usecols=(4, 5),
+                                          dtype=float, skip_header=skip)
+            nobj, npoints = np.atleast_1d(nobj), np.atleast_1d(npoints)
+            ok = np.isfinite(nobj) & np.isfinite(npoints)
+            if ok.any():
+                return float(np.median(nobj[ok])), float(np.median(npoints[ok]))
+        except (OSError, ValueError):
+            continue
+    return 0.0, 0.0
 
 
 def plot_population_df(outdir: str, cfg: AnalysisConfig, *, show: bool = False) -> bool:

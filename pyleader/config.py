@@ -155,11 +155,6 @@ class AnalysisConfig:
         return f"{self.diam_low}km_to_{self.diam_high}km"
 
     @property
-    def summary_name(self) -> str:
-        """Filename of the per-trial summary table (id + diameter range)."""
-        return f"SummaryAnalysis_Famid{self.famid}_{self.diam_tag}.txt"
-
-    @property
     def neowise_path(self) -> str:
         """Absolute path to the NEOWISE catalog file.
 
