@@ -732,6 +732,16 @@ pyleader/
 
 
 
+## Scope and limitations
+
+PyLEADER recovers *effective photometric* shape/spin distributions for the **observed** members
+of a population, under the assumptions of the LEADER method (triaxial ellipsoids, single-band
+photometry) plus this package's correction machinery. Before quoting results, read the honest
+inventory of assumptions, limitations, and caveats in
+[DevelopmentNotes.md](DevelopmentNotes.md) — including where credible intervals are lower
+bounds on the total uncertainty and which products (posterior vs. population distribution)
+support which kinds of statements.
+
 ## References
 
 - Nortunen, H., & Kaasalainen, M. 2017, *LEADER: fast estimates of asteroid shape elongation

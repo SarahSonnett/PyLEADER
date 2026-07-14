@@ -181,6 +181,139 @@ measurement — `jd  sun_x sun_y sun_z  obs_x obs_y obs_z  wavelength flux fluxe
 - **Legacy block:** the original format (count header; per-epoch Sun/observer vectors and
 `λ flux σ filter` lines separated by blank lines). Pass `--legacy-format` to write it.
 
+## Assumptions, limitations, and caveats
+
+An honest inventory, compiled for the public release and the journal paper. Items marked
+**(inherited)** come from the LEADER method as published (Nortunen & Kaasalainen 2017); the rest
+arise from this package's per-population correction machinery and data handling.
+
+### Physical model
+
+1. **Triaxial ellipsoids with `a ≥ b = c` (inherited).** Every object is modeled as an ellipsoid
+   characterized by a single elongation `p = b/a`. Real asteroids have concavities, albedo
+   variegation, and independent flattening (`c < b`), all of which modulate brightness; the
+   method attributes *all* brightness variation to elongation + viewing geometry. Consequence:
+   `p` is an *effective photometric elongation*, not a literal axis ratio, and any non-shape
+   variability biases it low (more apparent variation → more elongated).
+2. **Reflected-light scattering laws applied to thermal fluxes (inherited).** The synthetic
+   brightness uses Lommel–Seeliger+Lambert (or Hapke) scattering, while the W3/W4 measurements
+   are dominated by thermal emission. The published method makes the same approximation; thermal
+   effects (thermal inertia, night-side emission, phase-integral differences) are not modeled.
+   The per-population correction absorbs this *partially* — synthetic and real objects share
+   geometry and noise, but not thermal physics.
+3. **Rotation periods drawn uniformly over 3–12 h.** Real period distributions differ (and vary
+   with size); slow rotators, tumblers, and binaries violate the assumption that each apparition
+   samples many rotations at effectively random phase. Objects far outside 3–12 h are
+   represented incorrectly in the synthetics.
+4. **Spin-latitude sign is folded.** `β ∈ [0°, 90°]`: prograde and retrograde spins are
+   indistinguishable to the amplitude statistic; results say nothing about spin sense.
+   *Documentation item:* the code labels `β` inconsistently ("spin-axis latitude" in the README,
+   "spin pole polar angle" in one plot label) — resolve to one convention before release.
+5. **Pole longitudes and rotation phases assumed uniform (inherited).** True for most collisional
+   families; violated by any aligned sub-population (e.g. YORP-clustered spin vectors).
+
+### Shape library
+
+6. **Stretched DAMIT models stand in for the population's shapes.** Synthetic objects are drawn
+   from ~350 DAMIT shape models, each randomly stretched (factor `max(1, 2|N(0,1)|)` per axis)
+   until the target `p` is met. DAMIT is biased toward large, bright, high-amplitude objects
+   with well-sampled lightcurves; stretching produces a particular family of shapes that may not
+   represent small family members. There is no direct test of shape-library representativeness;
+   it is a structural systematic shared by all synthetics (bias map, basis, and hence both
+   corrections).
+
+### Photometric noise model
+
+7. **The white-noise fraction comes from the quietest apparitions.** The empirical noise model
+   applies `white_fraction` × the catalog flux–fluxerr relation, with the fraction estimated
+   from the 10th-percentile envelope of (observed intra-apparition scatter ÷ catalog fluxerr).
+   Assumptions: (a) the quietest decile of apparitions is nearly signal-free — residual
+   lightcurve signal there means the noise is *over*estimated; (b) the non-white remainder of
+   the error budget is perfectly common-mode within an apparition and cancels in η — partially
+   correlated terms violate this in either direction; (c) one global fraction applies at all
+   flux levels. The successive-difference scatter estimator removes slow trends, but with
+   rotation periods comparable to the WISE sampling cadence, some signal leaks into the
+   estimator regardless.
+8. **Noise realism is bounded by the catalog.** Fluxerr values are taken at face value as the
+   total error budget; unflagged cosmetics, blends, and background sources are not separately
+   modeled.
+
+### Correction machinery
+
+9. **The quadratic correction is a single-valued map through a many-to-one problem.** The p–β
+   degeneracy means several truths produce the same recovery; the quadratic silently picks one.
+   It is fit to few points (default 20 grid points × few seeds), can clip at physical bounds
+   (a recovered `β_corr = 0°` is an extrapolation artifact, not a measurement), and the report's
+   extrapolation warning triggers only outside the *fitted* range. Treat it as the fast
+   cross-check; the posterior is the primary statement.
+10. **The posterior assumes an approximately single-peaked population.** It is calibrated on
+    fixed-peak (near-delta) synthetic populations; for strongly skewed or multimodal true
+    distributions "the peak" is ill-defined. The multimodality flag and the peak-vs-median
+    channel consistency check are alarms, not guarantees.
+11. **The posterior is grid-bounded and Gaussian-approximated.** Truths outside the basis grid
+    (default `p ∈ [0.30, 0.95]`, `β ∈ [6°, 84°]`) carry zero prior probability — an
+    edge-hugging posterior means the grid, not the data, is binding (the report flags this).
+    The forward scatter at each grid point is modeled as a Gaussian estimated from only
+    `nseeds` realizations (interval precision `1/√(2(n−1))`: ±40% at 4 seeds, ±25% at 8), with
+    a covariance floor of half a recovery bin — a choice, not a measurement.
+12. **Credible intervals are conditional on the forward model.** They propagate sampling noise
+    and basis scatter, but *not* the structural systematics above (shape library, thermal
+    physics, noise-model assumptions). They are best interpreted as lower bounds on the total
+    uncertainty.
+13. **Unfolded β structure is degeneracy-limited.** The mixture validation shows the CDF-space
+    unfolding fits the amplitude CDF nearly perfectly (relerr ~0.01) while still failing to
+    localize β structure at NEOWISE noise levels — many f(p, β) fit the same data. Quote the
+    posterior for β; treat the unfolded β marginal as indicative. The unfolding's 16–84% bands
+    are statistical-only (perturbation ensemble) and the solution depends on the smoothness
+    regularization (α chosen by discrepancy principle). W-space unfolding additionally carries a
+    measured mixture-nonlinearity model error; CDF-space (default) removes it by construction.
+14. **CDF-space mixing assumes comparable amplitude counts per object.** Pooling amplitudes is
+    exactly linear in mixtures only when basis units contribute similar numbers of amplitudes
+    per object; differences are a second-order effect.
+
+### Data and selection
+
+15. **Survey selection enters only through the geometry sample.** Synthetics inherit the
+    *detected* population's cadences and (via the noise anchor) fluxes; objects NEOWISE never
+    detected, apparitions with <5 points, and any flux-dependent detection bias within the
+    sample are not otherwise modeled. Results describe the *observed* (diameter-cut, detected)
+    population, not the intrinsic one.
+16. **Family membership is taken as given.** Nesvorný HCM family lists (and the
+    region/taxonomy-based background definitions) contain interlopers; contamination
+    biases the population statistics and is not modeled.
+17. **Diameter cuts rely on NEOWISE diameters**, which carry their own ~10%+ uncertainties and
+    NEATM assumptions; objects without catalog diameters are excluded.
+18. **Single-band analysis.** The analysis uses one filter (typically W3); the synthetic
+    geometry reader independently selects each file's best filter, so band choice can differ
+    per object. Phase behavior is handled by the LEADER release's empirical phase correction
+    with a 40° phase-angle limit; apparitions are defined by a 60-day gap. All three are
+    inherited conventions, not fitted.
+
+### Statistical interpretation
+
+19. **Trial scatter is sampling uncertainty only.** The `ntrials` resampling captures
+    object-draw variance within the fixed dataset, not systematics.
+20. **Regularization defaults are inherited** (`δ_p`, `δ_β` from the MATLAB release) and the
+    recovered grid is fixed (20 × 29 bins); results at the bin scale are quantized (the
+    posterior's median channel and the covariance floor mitigate, not remove, this).
+21. **Reproducibility:** seeded runs are deterministic; results are not bit-for-bit identical to
+    the original MATLAB/notebook implementations (documented bug fixes — see the conversion
+    notes below).
+
+### Validation status (honest summary)
+
+- Posterior coverage was spot-checked (3/3 truths inside 95% intervals with correct
+  multimodality flags) — consistent, but a small sample; a systematic coverage campaign over
+  the grid would strengthen the paper.
+- The noise calibration and grid convergence (8×8 vs 12×12 agreeing to Δp = 0.002, Δβ = 1°)
+  were verified on family 3556; other populations inherit the method but have not been
+  individually validated.
+- The mixture validation quantifies unfolding fidelity on one family's geometry; its β caveat
+  (item 13) is measured, not hypothetical.
+- Regimes where the method degrades: very small populations (few pooled amplitudes), very faint
+  populations (noise-dominated amplitudes), strongly multimodal or skewed true distributions,
+  and any population whose recovered values pin against the basis-grid edge.
+
 ## Notes on the notebook → package conversion
 
 The package supersedes the original Jupyter notebooks (`LEADER_python_final`, `_bg`, `_forcedN`),
