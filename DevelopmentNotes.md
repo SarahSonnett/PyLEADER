@@ -278,6 +278,16 @@ arise from this package's per-population correction machinery and data handling.
     detected, apparitions with <5 points, and any flux-dependent detection bias within the
     sample are not otherwise modeled. Results describe the *observed* (diameter-cut, detected)
     population, not the intrinsic one.
+15b. **Designation handling is verified, with one future-proofing edge.** An audit (2026-07-12,
+    prompted by a packed-designation bug found in a sibling codebase) confirmed that
+    letter-packed high-numbered objects (≥100,000; 60–77% of tested families) and
+    provisionally designated objects with NEOWISE diameters are correctly built, matched, and
+    analyzed — 1,223/1,223 files across two families convert and match, and the ~10% of
+    catalog-matched members without usable `.obs` files show no designation-type bias (most
+    are `Nofilter` cases with no photometry surviving quality cuts). Edge case: the packing
+    helper covers numbers up to 619,999; members numbered beyond that (MPC extended `~`-base62
+    packing) would silently fail to match. No NEOWISE-era object is affected, but refreshed
+    membership lists should be checked before use.
 16. **Family membership is taken as given.** Nesvorný HCM family lists (and the
     region/taxonomy-based background definitions) contain interlopers; contamination
     biases the population statistics and is not modeled.

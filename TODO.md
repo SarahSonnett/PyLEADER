@@ -67,6 +67,11 @@ Remaining / nice-to-have:
       distribution* stays degeneracy-limited at realistic noise — quote the posterior for the
       peak and treat the unfolded β marginal as indicative.
 
+- [ ] **Extended MPC packing for numbers ≥ 620,000** — `convert_to_letter` covers single-char
+      packing only (max "z9999" = 619,999); the MPC `~`-base62 extension is unhandled, so such
+      objects would silently fail the catalog match. No NEOWISE-era object is affected; add
+      support (plus a loud warning on unmatched conversions) before using refreshed family lists.
+
 ## Optional follow-on tooling (deferred)
 
 - [ ] Port the `Compare_LEADER_results_*.ipynb` notebooks (currently in
