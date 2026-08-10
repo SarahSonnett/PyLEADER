@@ -26,8 +26,8 @@ def synthetic_amplitudes(normals, areas, dates, e_sun, e_earth, ang, beta, cfg,
     """Render a synthetic light curve for an assigned spin and reduce it to ``A``.
 
     Nuisance parameters (pole longitude ``lambda`` and rotation period ``Trot``)
-    are drawn internally as in the MATLAB code; the assigned spin latitude
-    ``beta`` is passed in (and recorded by the caller). Returns ``(A, Nappar)``.
+    are drawn internally as in the MATLAB code; the assigned spin-axis polar
+    angle ``beta`` is passed in (and recorded by the caller). Returns ``(A, Nappar)``.
 
     ``real_flux`` (the borrowed object's measured fluxes at the same epochs)
     enables the empirical noise model: the model brightness is scaled to the

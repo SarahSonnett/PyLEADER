@@ -31,7 +31,7 @@ class SyntheticResult:
     p_peak: float
     b_peak: float
     p_true: np.ndarray          # assigned shape elongations
-    beta_true: np.ndarray       # assigned spin latitudes (radians)
+    beta_true: np.ndarray       # assigned spin-axis polar angles (radians)
     inversion: InversionResult
     P: np.ndarray               # recovered p grid
     BETA: np.ndarray            # recovered beta grid (radians)
@@ -122,7 +122,7 @@ def _draw_shape(model_files, cfg: SyntheticConfig, p_target=None):
 
 
 def _draw_beta(cfg: SyntheticConfig) -> float:
-    """Assign a spin latitude: near b_peak most of the time, else uniform."""
+    """Assign a spin-axis polar angle beta: near b_peak most of the time, else uniform."""
     if np.random.rand() <= cfg.beta_peak_chance:
         beta = 0.0
         while beta <= 0 or beta >= np.pi / 2:

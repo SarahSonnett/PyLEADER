@@ -2,7 +2,7 @@
 
 A Python version of the **LEADER** method (originally MATLAB; Nortunen & Kaasalainen 2017), with
 enhancements for diagnostics, error determination, and per-population bias correction. PyLEADER
-recovers the distributions of asteroid **shape elongation** (`p`) and **spin-axis latitude** (`β`)
+recovers the distributions of asteroid **shape elongation** (`p`) and **spin-axis orientation** (`β`)
 for a whole population from WISE/NEOWISE thermal photometry.
 
 Give it a **dynamical population ID** — a Nesvorný collisional family or a background main-belt
@@ -22,15 +22,18 @@ Every step is also available as a standalone command (see [Usage](#usage)).
 PyLEADER implements the **LEADER** method (*Latitudes and Elongations of Asteroid Distributions
 Estimated Rapidly*) of Nortunen & Kaasalainen (2017). For large, sparsely sampled populations,
 inverting individual lightcurves is infeasible — so instead of solving for one object at a time,
-LEADER recovers the **joint distribution of shape elongation** `p` **and spin-axis latitude** `β` **for the
+LEADER recovers the **joint distribution of shape elongation** `p` **and spin-axis orientation** `β` **for the
 whole population** from the statistics of brightness variations. Each object is modeled as a triaxial
-ellipsoid with axes `a ≥ b = c`; the shape elongation is `p = b/a ∈ (0, 1]` (`p = 1` is a sphere),
-and `β` is the spin-axis latitude relative to the ecliptic.
+ellipsoid with axes `a ≥ b = c`; the shape elongation is `p = b/a ∈ (0, 1]` (`p = 1` is a sphere).
+`β ∈ [0°, 90°]` is the **polar angle of the spin axis measured from the ecliptic pole** — the
+*complement* of the pole's ecliptic latitude, per Nortunen & Kaasalainen's convention (their
+footnote 2): `β = 0°` means the spin axis is perpendicular to the ecliptic plane, `β = 90°`
+means it lies in the plane. (Prograde and retrograde are folded together.)
 
 **1. Per object — brightness amplitude.** For each apparition, from the phase-corrected intensities
-`L` we compute the **relative brightness dispersion** `η` (eta — the scatter of the squared
+`L` we compute the **brightness variation estimate** `η` (eta — the scatter of the squared
 brightness relative to its mean) and convert it to an amplitude `A`
-(Eq. 7 of Nortunen & Kaasalainen 2017):
+(Eqs. 1 and 7 of Nortunen & Kaasalainen 2017):
 
 $$\eta = \frac{\Delta(L^2)}{\langle L^2\rangle}, \quad \Delta(L^2)=\sqrt{\big\langle (L^2-\langle L^2\rangle)^2\big\rangle}, \qquad A = \sqrt{1 - \dfrac{1}{\dfrac{1}{\sqrt{8}\eta} + \tfrac{1}{2}}}$$
 
@@ -275,7 +278,7 @@ across a grid of assigned peaks.
 - **Arguments:**
   - `--p-peaks P …` assigned elongation peaks *(each* `0 < p ≤ 1`*; required for the bias map;
     pipeline default 0.35 0.45 0.55 0.65 0.75)*
-  - `--b-peaks B …` assigned latitude peaks in **degrees** *(each* `0 < β < 90`*; required for the
+  - `--b-peaks B …` assigned `β` peaks in **degrees** *(each* `0 < β < 90`*; required for the
     bias map; pipeline default 10 30 50 75; converted to radians internally)*
   - `--ndraws N` synthetic objects per grid point *(int ≥ 1, default 1000)*
   - `--nseeds N` realizations per grid point for error bars *(int ≥ 1, default 1)*
@@ -654,10 +657,11 @@ noise. The summary shows how LEADER's recovered means (colored) depart from the 
 ![Fam3556 bias-map summary: recovered vs assigned p and beta](docs/images/Fam3556_bias_map_summary.png)
 
 The recovered `p` is biased low (toward more elongated) for every assigned value. The bias is
-smallest for populations with high spin latitudes — the `β_peak = 75°` curve lies closest to
-the dashed one-to-one line — and grows toward lower spin latitudes, with the `β_peak = 10°`
-curve falling farthest below it. Physically: photometric noise inflates the apparent brightness
-variation, and low-latitude viewing geometries compound the effect. `β` is compressed toward mid-range
+smallest for populations whose spin axes lie near the ecliptic plane — the `β_peak = 75°`
+curve lies closest to the dashed one-to-one line — and grows as the spin axes approach the
+ecliptic pole, with the `β_peak = 10°` curve falling farthest below it. Physically: photometric
+noise inflates the apparent brightness variation, and pole-perpendicular spin geometries (which
+present little intrinsic variation) compound the effect. `β` is compressed toward mid-range
 (over-estimated below ~45°, under-estimated above), nearly independently of `p_peak`. Fitting the
 recovered→true quadratic to these points gives the Step-5a correction (R²: 0.69 in `p`, 0.91 in
 `β`):
@@ -686,11 +690,11 @@ A possible interpretation, element by element:
   the bias — for this family, LEADER under-reports `p` by ~0.13 and under-reports `β` by ~7°.
 - The credible contours are compact and **single-peaked**, so this dataset supports a definite
   statement: *the family's true peak lies at `p = 0.58 ± 0.03`, `β = 47° ± 6°` (68%)* — the
-  family is moderately elongated with mid-latitude spins. Had the region been a long diagonal
+  family is moderately elongated with mid-range spin-axis orientations. Had the region been a long diagonal
   ridge or several islands (see the multimodality note in Step 5b), the honest statement would
   instead be "several true populations are consistent with this recovery".
 - The **tilt** of the credible ellipse shows the residual p–β degeneracy: slightly rounder shapes
-  with slightly lower spin latitudes mimic slightly more elongated shapes at higher latitudes.
+  at slightly lower `β` mimic slightly more elongated shapes at higher `β`.
   The marginals (middle/right panels) integrate over that tilt, which is why quoting the two
   1-D intervals separately is slightly conservative.
 - What these products can — and cannot — reveal: the posterior constrains the **peak** of the
@@ -717,7 +721,7 @@ with — and independence from — the posterior above: the peak of the *distrib
 posterior's *peak location* land in the same place by two unrelated computations. The `β`
 marginal (right) should be read with more caution: the mixture validation shows that `β`
 structure in the *unfolded* product remains degeneracy-limited at NEOWISE noise levels, so its
-monotonic decline toward high latitudes is indicative, not definitive — for a defensible `β`
+monotonic decline toward high `β` is indicative, not definitive — for a defensible `β`
 statement, quote the posterior's credible interval instead.
 
 ## Package layout

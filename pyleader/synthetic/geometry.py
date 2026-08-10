@@ -16,7 +16,7 @@ def transform_mat(phi0, omega, t, t0, beta, lam):
     """Rotation matrix from the inertial frame to the asteroid body frame.
 
     Recommended inputs: ``phi0 = 0``, ``omega = 2*pi/period``, ``t0 = 0``.
-    ``beta`` is the spin latitude and ``lam`` the pole longitude.
+    ``beta`` is the spin-axis polar angle and ``lam`` the pole longitude.
     """
     arg1 = phi0 + omega * (t - t0)
     RZ1 = np.array([[np.cos(arg1), np.sin(arg1), 0.0],

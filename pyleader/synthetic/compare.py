@@ -34,7 +34,7 @@ def ks_comparison(P1, Pm1, B1, Bm1, P2, Pm2, B2, Bm2, *,
     """Compare the p and beta marginal CDFs of two populations.
 
     Returns ``(DvalueP, DvalueB, results)`` where each ``Dvalue`` is
-    ``[L1/4, L2, 2*Linf]``. ``B*`` grids are spin latitudes in radians.
+    ``[L1/4, L2, 2*Linf]``. ``B*`` grids are spin-axis polar angles (beta) in radians.
     """
     # --- shape elongation p (domain [0, 1]) ---
     P1g, CP1 = _cdf(P1, Pm1, 1.0)
@@ -42,7 +42,7 @@ def ks_comparison(P1, Pm1, B1, Bm1, P2, Pm2, B2, Bm2, *,
     CP2i = np.interp(P1g, P2g, CP2)
     DvalueP = _distances(CP1, CP2i)
 
-    # --- spin latitude beta (domain [0, pi/2]) ---
+    # --- spin-axis polar angle (beta) beta (domain [0, pi/2]) ---
     B1g, CB1 = _cdf(B1, Bm1, np.pi / 2)
     B2g, CB2 = _cdf(B2, Bm2, np.pi / 2)
     CB2i = np.interp(B1g, B2g, CB2)

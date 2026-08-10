@@ -81,7 +81,7 @@ def plot_bias_map(csv_path: str, out_png: str | None = None, *, show: bool = Fal
     axb.plot(b_x, asgn_b, "k--", marker="s", label="assigned (true)")
     axb.set_xlabel("assigned  β_peak (deg)")
     axb.set_ylabel("recovered mean β (deg)")
-    axb.set_title(r"Spin latitude $\beta$: recovered vs assigned")
+    axb.set_title(r"Spin-axis polar angle $\beta$: recovered vs assigned")
     axb.grid(True, alpha=0.3)
     axb.legend(fontsize=8)
 

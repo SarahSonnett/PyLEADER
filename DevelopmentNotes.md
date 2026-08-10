@@ -205,10 +205,14 @@ arise from this package's per-population correction machinery and data handling.
    with size); slow rotators, tumblers, and binaries violate the assumption that each apparition
    samples many rotations at effectively random phase. Objects far outside 3–12 h are
    represented incorrectly in the synthetics.
-4. **Spin-latitude sign is folded.** `β ∈ [0°, 90°]`: prograde and retrograde spins are
-   indistinguishable to the amplitude statistic; results say nothing about spin sense.
-   *Documentation item:* the code labels `β` inconsistently ("spin-axis latitude" in the README,
-   "spin pole polar angle" in one plot label) — resolve to one convention before release.
+4. **`β` is a polar angle, and its sign is folded.** Per Nortunen & Kaasalainen's convention
+   (their footnote 2), `β ∈ [0°, 90°]` is the polar angle of the spin axis measured from the
+   ecliptic pole — the *complement* of the pole's ecliptic latitude: `β = 0°` is an axis
+   perpendicular to the ecliptic plane, `β = 90°` an axis in the plane. Prograde and retrograde
+   spins are indistinguishable to the amplitude statistic; results say nothing about spin
+   sense. *(Resolved 2026-07-15: the README and figure labels previously mixed "latitude" and
+   "polar angle" language — all documentation now states the polar-angle convention, verified
+   against the paper.)*
 5. **Pole longitudes and rotation phases assumed uniform (inherited).** True for most collisional
    families; violated by any aligned sub-population (e.g. YORP-clustered spin vectors).
 
