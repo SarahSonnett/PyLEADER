@@ -28,7 +28,8 @@ ellipsoid with axes `a ≥ b = c`; the shape elongation is `p = b/a ∈ (0, 1]` 
 and `β` is the spin-axis latitude relative to the ecliptic.
 
 **1. Per object — brightness amplitude.** For each apparition, from the phase-corrected intensities
-`L` we compute the brightness-dispersion statistic and convert it to an amplitude `A`
+`L` we compute the **relative brightness dispersion** `η` (eta — the scatter of the squared
+brightness relative to its mean) and convert it to an amplitude `A`
 (Eq. 7 of Nortunen & Kaasalainen 2017):
 
 $$\eta = \frac{\Delta(L^2)}{\langle L^2\rangle}, \quad \Delta(L^2)=\sqrt{\big\langle (L^2-\langle L^2\rangle)^2\big\rangle}, \qquad A = \sqrt{1 - \dfrac{1}{\dfrac{1}{\sqrt{8}\eta} + \tfrac{1}{2}}}$$
@@ -36,8 +37,8 @@ $$\eta = \frac{\Delta(L^2)}{\langle L^2\rangle}, \quad \Delta(L^2)=\sqrt{\big\la
 In the code this is `eta = std(L**2)/mean(L**2)` and the `A` formula in
 `[lightcurve.py](pyleader/lightcurve.py)`.
 
-**2. Population — forward model.** Pooling `A` over all sampled objects gives the cumulative
-distribution `C(A)`. LEADER writes it as a weighted sum of analytic basis functions `F_ij` over a
+**2. Population — forward model.** Pooling the per-apparition amplitudes `A` from step 1 over
+all sampled objects gives their cumulative distribution `C(A)`. LEADER writes it as a weighted sum of analytic basis functions `F_ij` over a
 grid of `(p_i, β_j)` bins, a linear system in the **occupation numbers** `w_ij` (the unnormalized
 joint distribution of `p` and `β`):
 
@@ -60,7 +61,9 @@ bias depends on the observing geometry — so it differs from dataset to dataset
 derives a **per-population correction**: it builds synthetic populations of assigned `(p, β)` observed
 at the *same population's* cadence/geometry, measures how LEADER recovers them, and fits a
 recovered→true mapping to apply to the real result. This per-trial error determination and
-correction machinery are the enhancements used in Sonnett, Lilly & Grav (2025).
+correction machinery are the enhancements used in
+[Sonnett, Lilly & Grav (2025)](https://doi.org/10.5194/epsc-dps2025-2069) — full citation in
+[References](#references).
 
 ## Install
 
@@ -440,16 +443,17 @@ pyleader-unfold <analysis_outdir> --basis <analysis_outdir>_basis
   population's *peak*; this estimates the population's full *spread across objects*.
 - **Two response spaces** (`--space {cdf,w}`):
   - **`cdf` (default, recommended for evaluating systematics):** the response columns are each
-    basis point's simulated **amplitude CDF**, and the observation is the population's pooled
-    amplitude CDF. Pooling amplitudes *is* mixing, so the forward model is **exactly linear in
+    basis point's simulated amplitude **cumulative distribution function (CDF)**, and the
+    observation is the population's pooled amplitude CDF. Pooling amplitudes *is* mixing, so the forward model is **exactly linear in
     mixtures** — the residual misfit is measurement + sampling noise only, with no inversion
     model error. Requires a basis whose units saved their amplitude samples (built from
     2026-07-08 on).
   - **`w`:** the original response over recovered joint solutions; works with any
-    basis/analysis. *Caveat:* it assumes the recovered solution of a mixture is the mixture of
-    recovered solutions, which the regularized inversion violates mildly (measured with the
-    built-in mixture validation) — treat W-space shapes as indicative and check the printed
-    `relerr`.
+    basis/analysis. *Caveat:* this mode assumes additivity — that the distribution LEADER
+    recovers for a blended population equals the same blend of the distributions it recovers
+    for each component separately. The regularized inversion breaks that assumption slightly
+    (an effect we measured with the built-in mixture validation), so treat shapes from this
+    mode as approximate and check the printed relative fit error (`relerr`).
 - **Input:**
   - the Step-3 analysis directory (its `Trial*/W_trial*.npz`; for `--space cdf`, the saved
     per-trial amplitudes or the raw `.obs` files via `--obsdir`)
@@ -538,8 +542,9 @@ definitions and both layouts: [DevelopmentNotes.md](DevelopmentNotes.md).
 
 The population membership files **ship with the package** (gzipped under `pyleader/data/`; numpy
 reads them directly). A same-named uncompressed copy in `--base-dir` always takes precedence, so
-you can substitute updated versions without touching the package. To regenerate them from the
-original sources:
+you can substitute updated versions without touching the package.
+
+**Regeneration recipe** — to rebuild these files from the original sources:
 
 **`AllMBAFamilyMembers.txt`** — three whitespace-delimited columns:
 `family_id  packed_MPC_designation  object_number/designation`.
@@ -648,9 +653,11 @@ noise. The summary shows how LEADER's recovered means (colored) depart from the 
 
 ![Fam3556 bias-map summary: recovered vs assigned p and beta](docs/images/Fam3556_bias_map_summary.png)
 
-`p` is recovered biased low everywhere, and by *more* at low spin latitude (the `β_peak = 10°`
-curve sits farthest below the diagonal) — photometric noise inflates the apparent brightness
-variation, and low-latitude geometries compound it. `β` is compressed toward mid-range
+The recovered `p` is biased low (toward more elongated) for every assigned value. The bias is
+smallest for populations with high spin latitudes — the `β_peak = 75°` curve lies closest to
+the dashed one-to-one line — and grows toward lower spin latitudes, with the `β_peak = 10°`
+curve falling farthest below it. Physically: photometric noise inflates the apparent brightness
+variation, and low-latitude viewing geometries compound the effect. `β` is compressed toward mid-range
 (over-estimated below ~45°, under-estimated above), nearly independently of `p_peak`. Fitting the
 recovered→true quadratic to these points gives the Step-5a correction (R²: 0.69 in `p`, 0.91 in
 `β`):
@@ -741,6 +748,15 @@ inventory of assumptions, limitations, and caveats in
 [DevelopmentNotes.md](DevelopmentNotes.md) — including where credible intervals are lower
 bounds on the total uncertainty and which products (posterior vs. population distribution)
 support which kinds of statements.
+
+In particular, expect degraded results for:
+
+- **very small populations** (few objects → few pooled amplitudes);
+- **very faint populations** (amplitudes dominated by photometric noise);
+- **strongly multimodal or skewed** true distributions (the posterior assumes a single peak;
+  the multimodality flag and the peak-vs-median consistency check are the built-in alarms);
+- populations whose recovered values **pin against the basis-grid edge** (the report flags
+  this; widen `--basis-p-range`/`--basis-b-range` and re-run).
 
 ## References
 
