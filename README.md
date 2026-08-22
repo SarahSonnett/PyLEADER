@@ -581,6 +581,37 @@ Diameters and Albedos V2.0 bundle (Mainzer et al. 2019,
 [doi:10.26033/18S3-2Z54](https://doi.org/10.26033/18S3-2Z54)) at the NASA PDS Small Bodies Node
 and place it in `--base-dir`. Steps 2–3 stop early with these instructions if it is missing.
 
+### Custom populations (user-defined membership)
+
+Any population you can write a member list for can run through the whole pipeline — no code
+changes. This is how populations that standard family catalogs cannot separate (e.g. the
+Eulalia family, which overlaps New Polana and is invisible to hierarchical clustering) enter
+the program:
+
+1. **Build the member rows** in the three-column `AllMBAFamilyMembers.txt` format above, under
+   an unused `family_id` of your choosing (e.g. the parent asteroid's number). Members may be
+   numbered or provisionally designated; the pipeline's designation converter handles both
+   (numbered up to 619,999 — see `TODO.md` for the extended-packing limitation).
+2. **Place a combined file in the run's `--base-dir`**: your rows appended to a copy of the
+   shipped list. A base-dir copy always takes precedence over the shipped one, so nothing
+   global changes and other runs are unaffected.
+3. **Run normally**, with `--build` on first use to fetch the population's NEOWISE photometry:
+
+   ```sh
+   pyleader-population <your_famid> --build --base-dir /path/to/run_dir --diam-low 1 --diam-high 3
+   ```
+
+   Every downstream product — the per-population noise model, bias map, posterior, and
+   population distribution — derives from *your* member list's own photometry and geometry,
+   exactly as for a catalog family.
+4. **Document the membership provenance.** A custom list means custom selection systematics:
+   record the selection criteria, input catalogs (with versions and dates), per-cut object
+   counts, and any deviations from the published recipe, and state the membership pedigree
+   wherever the population enters statistical comparisons. A worked example of this record —
+   the Eulalia family reconstructed from Walsh et al. (2013) / Bottke et al. (2026, PSJ)
+   selection criteria — accompanies this program's data as
+   `Eulalia495_membership_README.md`.
+
 ### As a library
 
 ```python
