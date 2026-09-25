@@ -1,0 +1,248 @@
+"""Configuration objects for the PyLEADER package.
+
+These dataclasses replace the hard-coded "top cell" of the original notebooks
+(``LEADER_python_final.ipynb``, ``..._bg``, ``..._forcedN`` and
+``make_LEADER_obs_files.ipynb``).  Defaults reproduce the notebook values so
+that running with no overrides matches the historical workflow; the CLI scripts
+in ``scripts/`` expose every field as a command-line argument.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from typing import Optional
+
+# Default location of the WISE/NEOWISE working data: the current working
+# directory unless PYLEADER_BASE_DIR is set.  The input catalog files
+# (``neowise_mainbelt.csv``, an updated ``AllMBAFamilyMembers.txt``, ...) and
+# all ``Fam*_data_*`` / ``*_analysis_*`` directories live here; every CLI also
+# accepts ``--base-dir``.
+DEFAULT_BASE_DIR = os.environ.get("PYLEADER_BASE_DIR", os.getcwd())
+
+# Package data dir: ships the population membership files (gzipped), so a fresh
+# checkout works without the author's working directory. A same-named file in
+# base_dir takes precedence over the shipped copy.
+PKG_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+
+
+def resolve_data_file(name: str, base_dir: str) -> str:
+    """Resolve a membership/catalog filename to a usable path.
+
+    Order: absolute path as-is; else ``base_dir/<name>`` if it exists; else the
+    gzipped copy shipped with the package (numpy reads ``.gz`` transparently).
+    Falls back to the ``base_dir`` path (so the error message names it) when
+    nothing exists.
+    """
+    if name.startswith("/"):
+        return name
+    local = os.path.join(base_dir, name)
+    if os.path.exists(local):
+        return local
+    shipped = os.path.join(PKG_DATA_DIR, name + ".gz")
+    if os.path.exists(shipped):
+        return shipped
+    return local
+
+
+def require_neowise(path: str) -> str:
+    """Check the NEOWISE diameters table exists; fail early with instructions.
+
+    The table (~27 MB) is not shipped with the package: download
+    ``neowise_mainbelt.csv`` from the NEOWISE Diameters and Albedos V2.0 bundle
+    (Mainzer et al. 2019) and place it in ``--base-dir``.
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"NEOWISE diameters table not found: {path}\n"
+            "Download 'neowise_mainbelt.csv' from the NEOWISE Diameters and "
+            "Albedos V2.0 bundle (Mainzer et al. 2019, doi:10.26033/18S3-2Z54, "
+            "NASA PDS Small Bodies Node) and place it in your --base-dir."
+        )
+    return path
+
+
+@dataclass
+class AnalysisConfig:
+    """Configuration for a LEADER shape/spin inversion run.
+
+    A single ``AnalysisConfig`` replaces the three near-identical analysis
+    notebooks.  The notebook variants map onto config flags:
+
+    * ``LEADER_python_final``     -> ``population_kind="family"``, ``forced_n=False``
+    * ``LEADER_python_final_bg``  -> ``population_kind="background"``, ``forced_n=False``
+    * ``LEADER_python_forcedN``   -> ``forced_n=True`` (subsample to ``wanted`` points)
+    """
+
+    # --- core sample selection (from the notebook top cell) ---
+    famid: str = "3815"                     # family / population to explore
+    cat: str = "allsky_4band_p1bs_psd"      # catalog used to generate the .obs files
+    filterpriority: str = "w3"              # photometry filter to analyze
+    diam_low: float = 3.0                   # lower diameter limit of sample (km)
+    diam_high: float = 5.0                  # upper diameter limit of sample (km)
+
+    # --- statistics / tolerances ---
+    phase_angle_limit: float = 40.0         # upper solar phase-angle limit (deg)
+    Ndraws: int = 1000                      # random draws per trial
+    Ntrials: int = 100                      # number of trials (repeats of the experiment)
+    date_tol: float = 60.0                  # max JD gap between points in one apparition
+    wanted: int = 5                         # min data points per object per epoch
+
+    # --- behaviour flags ---
+    overwrite: bool = False                 # overwrite (vs. append/skip) existing output
+    convert2degrees: bool = True            # report/plot beta in degrees
+
+    # --- input catalog file (relative to base_dir or absolute) ---
+    neowise_fle: str = "neowise_mainbelt.csv"
+
+    # --- variant selectors (collapse the three notebooks) ---
+    population_kind: str = "family"         # "family" -> Fam<famid>; "background" -> <famid>
+    forced_n: bool = False                  # forcedN: subsample each object to `wanted` amplitudes
+
+    base_dir: str = DEFAULT_BASE_DIR
+
+    # Point the analysis at an arbitrary directory of .obs files, bypassing the
+    # base_dir/<token>_data_<cat>_<filter> naming convention. When None the
+    # directory is derived from the fields above (the usual case).
+    obsdir: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if self.population_kind not in ("family", "background"):
+            raise ValueError(
+                "population_kind must be 'family' or 'background', "
+                f"got {self.population_kind!r}"
+            )
+
+    @property
+    def _famtoken(self) -> str:
+        """Family token used in directory names.
+
+        Mirrors the notebook difference: ``LEADER_python_final`` prefixes the
+        numeric family id with ``Fam``; ``LEADER_python_final_bg`` uses the
+        (already descriptive) population id verbatim.
+        """
+        return f"Fam{self.famid}" if self.population_kind == "family" else self.famid
+
+    @property
+    def datadir(self) -> str:
+        """Directory of input ``.obs`` files.
+
+        Returns ``obsdir`` when set, otherwise the conventional
+        ``base_dir/<token>_data_<cat>_<filter>/`` path.
+        """
+        if self.obsdir is not None:
+            return self.obsdir
+        return (
+            f"{self.base_dir}/{self._famtoken}_data_"
+            f"{self.cat}_{self.filterpriority}/"
+        )
+
+    @property
+    def run_base(self) -> str:
+        """Base path shared by all of one run's output directories.
+
+        Role suffixes are appended: ``<run_base>_analysis`` (per-trial
+        diagnostics), ``<run_base>_summary`` (headline products),
+        ``<run_base>_biasmap`` and ``<run_base>_basis`` (simulation libraries)
+        — four sibling directories that sort together in the working dir.
+        The ``forcedN`` variant prefixes the name with ``ForcedN<wanted>_``.
+        """
+        prefix = f"ForcedN{self.wanted}_" if self.forced_n else ""
+        return (
+            f"{self.base_dir}/{prefix}{self._famtoken}_"
+            f"{self.cat}_{self.filterpriority}_"
+            f"{self.diam_low}km_to_{self.diam_high}km"
+        )
+
+    @property
+    def outdir(self) -> str:
+        """The analysis directory (Step 3's per-trial output)."""
+        return f"{self.run_base}_analysis"
+
+    @property
+    def summary_outdir(self) -> str:
+        """The summary directory: every headline product, one place."""
+        return f"{self.run_base}_summary"
+
+    @property
+    def diam_tag(self) -> str:
+        """Diameter-range label used in output filenames (e.g. ``3.0km_to_5.0km``)."""
+        return f"{self.diam_low}km_to_{self.diam_high}km"
+
+    @property
+    def neowise_path(self) -> str:
+        """Absolute path to the NEOWISE catalog file.
+
+        Absolute paths are used as-is; bare filenames are resolved against
+        ``base_dir`` (where the notebooks found them).
+        """
+        if self.neowise_fle.startswith("/"):
+            return self.neowise_fle
+        return f"{self.base_dir}/{self.neowise_fle}"
+
+
+@dataclass
+class ObsBuildConfig:
+    """Configuration for building LEADER ``.obs`` input files from IRSA/Horizons.
+
+    Replaces the top cell of ``make_LEADER_obs_files.ipynb``.
+    """
+
+    famid: str = "350"                       # collisional family identifier
+    cat: str = "allsky_4band_p1bs_psd"       # IRSA catalog to query
+    min_obs: int = 5                         # min observations to write a .obs file
+    istart: int = 0                          # index to resume from (after interruption)
+    overwrite: bool = False                  # overwrite existing data dir / curl script
+    filterpriority: str = "w3"               # filter to analyze (lowercase)
+
+    family_file: str = "AllMBAFamilyMembers.txt"  # MBA family membership listing
+    neowise_fle: str = "neowise_mainbelt.csv"     # NEOWISE-determined properties (PDS SBN)
+
+    # "family" -> Fam<famid> dir + family-membership cross-match;
+    # "background" -> <famid> dir + BGobjs_*_neowise.txt membership.
+    population_kind: str = "family"
+
+    # Write .obs in the legacy block format instead of the default tabular format.
+    legacy_format: bool = False
+
+    base_dir: str = DEFAULT_BASE_DIR
+
+    # Write .obs into an arbitrary directory, bypassing the naming convention.
+    obsdir: Optional[str] = None
+
+    @property
+    def _poptoken(self) -> str:
+        """Directory token: ``Fam<famid>`` for families, ``<famid>`` for backgrounds."""
+        return f"Fam{self.famid}" if self.population_kind == "family" else self.famid
+
+    @property
+    def data_dir(self) -> str:
+        """Directory the ``.obs`` files are written to (matches ``AnalysisConfig.datadir``)."""
+        if self.obsdir is not None:
+            return self.obsdir
+        return f"{self.base_dir}/{self._poptoken}_data_{self.cat}_{self.filterpriority}"
+
+    @property
+    def ifilt(self) -> int:
+        """Index into the cc_flags / ph_qual strings for the chosen filter."""
+        if self.filterpriority == "w2":
+            return 1
+        if self.filterpriority == "w3":
+            return 2
+        raise ValueError(f"Unsupported filterpriority {self.filterpriority!r}")
+
+    @property
+    def family_path(self) -> str:
+        """Family membership list: base_dir copy, else the shipped package copy."""
+        return resolve_data_file(self.family_file, self.base_dir)
+
+    @property
+    def neowise_path(self) -> str:
+        if self.neowise_fle.startswith("/"):
+            return self.neowise_fle
+        return f"{self.base_dir}/{self.neowise_fle}"
+
+    @property
+    def curl_script(self) -> str:
+        """Path of the optional curl download script (notebook: ``GetWiseData_FamID*.sh``)."""
+        return f"{self.base_dir}/GetWiseData_FamID{self.famid}.sh"

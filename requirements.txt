@@ -1,0 +1,9 @@
+# Core analysis (run_analysis / scripts/run_analysis.py)
+numpy
+scipy
+matplotlib
+
+# Obs-file building (build_obs_files / scripts/build_obs_files.py)
+astropy
+sunpy
+requests

@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyleader"
+version = "0.1.0"
+description = "Python port of the LEADER method: asteroid shape-elongation and spin-latitude distributions from WISE/NEOWISE photometry"
+readme = "README.md"
+license = { text = "BSD-3-Clause" }
+requires-python = ">=3.9"
+authors = [{ name = "Sarah Sonnett", email = "ssonnett@psi.edu" }]
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+# Building .obs input files (pyleader.obsfiles) queries IRSA + JPL Horizons.
+obs = ["astropy", "sunpy", "requests"]
+
+[project.urls]
+Repository = "https://github.com/SarahSonnett/PyLEADER"
+
+[project.scripts]
+pyleader-population      = "pyleader.cli.run_population:main"
+pyleader-download-models = "pyleader.cli.download_models:main"
+pyleader-analysis        = "pyleader.cli.run_analysis:main"
+pyleader-build-obs       = "pyleader.cli.build_obs_files:main"
+pyleader-spot-check      = "pyleader.cli.spot_check:main"
+pyleader-compare         = "pyleader.cli.compare_populations:main"
+pyleader-bias-map        = "pyleader.cli.bias_map:main"
+pyleader-basis           = "pyleader.cli.basis_runs:main"
+pyleader-unfold          = "pyleader.cli.unfold_analysis:main"
+pyleader-plot-bias-map   = "pyleader.cli.plot_bias_map:main"
+pyleader-fit-correction  = "pyleader.cli.fit_correction:main"
+
+[tool.setuptools.packages.find]
+include = ["pyleader*"]
+
+[tool.setuptools.package-data]
+# Ship the canonical bias correction (json) and the DAMIT model listing (txt).
+"pyleader.synthetic" = ["data/*.json", "data/*.txt"]
+# Ship the population membership files (gzipped): family list + background selections.
+"pyleader" = ["data/*.gz"]
