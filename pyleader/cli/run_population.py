@@ -82,6 +82,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--posterior-stat", choices=("peak", "median", "both"), default=d.posterior_stat,
                    help="recovered statistic the posterior inverts; 'both' (default) also "
                         "reports a peak-vs-median consistency check")
+    p.add_argument("--neowise-fle", default=d.neowise_fle,
+                   help="NEOWISE catalog file for member diameters (name resolved "
+                        "against base-dir, or an absolute path). REQUIRED to be the "
+                        "matching PDS table for non-mainbelt populations "
+                        "(e.g. neowise_jupiter_trojans.csv)")
     p.add_argument("--base-dir", default=None)
     p.add_argument("--obsdir", default=None,
                    help="read/write .obs from this exact directory (bypasses the naming convention); "
@@ -109,6 +114,7 @@ def main(argv=None) -> int:
         basis_p_range=tuple(a.basis_p_range), basis_b_range_deg=tuple(a.basis_b_range),
         basis_nseeds=a.basis_nseeds, basis_nproc=a.basis_nproc,
         posterior_stat=a.posterior_stat, base_dir=a.base_dir, obsdir=a.obsdir,
+        neowise_fle=a.neowise_fle,
     )
     res = run_population(cfg, do_build=a.build, refresh_models=a.refresh_models, seed=a.seed)
     print(f"\nDone. Report + corrections in: {res.summary_dir}")

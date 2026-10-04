@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 
 import numpy as np
 
@@ -112,9 +113,25 @@ def build_obs_files(cfg: ObsBuildConfig) -> str:
     matchids, matchids_curlformat = prepare_matchids(cfg)
 
     for jj in range(int(cfg.istart), len(matchids)):
-        print("Working on object ID " + str(matchids[jj]) + ", index = " + str(jj))
+        print("Working on object ID " + str(matchids[jj]) + ", index = " + str(jj),
+              flush=True)
 
-        irsaoutput = query_irsa(cfg.cat, str(matchids_curlformat[jj]), str(matchids[jj]))
+        # Transient IRSA/network failures must not kill a multi-hour pull:
+        # retry with backoff, then skip the object with a resumable marker.
+        irsaoutput = None
+        for attempt in range(3):
+            try:
+                irsaoutput = query_irsa(cfg.cat, str(matchids_curlformat[jj]),
+                                        str(matchids[jj]))
+                break
+            except Exception as err:
+                print(f"IRSA query failed for {matchids[jj]} "
+                      f"(attempt {attempt + 1}/3): {err}", flush=True)
+                time.sleep(30 * (attempt + 1))
+        if irsaoutput is None:
+            print(f"IRSA permanently failed for {matchids[jj]}; skipping "
+                  f"(re-run with --istart {jj} to retry)", flush=True)
+            continue
 
         # locate the data rows beneath the column header
         idata = []
@@ -192,8 +209,20 @@ def build_obs_files(cfg: ObsBuildConfig) -> str:
                 matchids_curlformat[jj], jd_f
             )
         except ValueError:
-            print("No horizons match for obj id " + matchids[jj])
+            print("No horizons match for obj id " + matchids[jj], flush=True)
             continue
+        except Exception as err:
+            # Transient Horizons/network failure: one retry, then skip resumably.
+            print(f"Horizons failed for {matchids[jj]}: {err}; retrying once",
+                  flush=True)
+            time.sleep(60)
+            try:
+                astx, asty, astz, ast_to_wisex, ast_to_wisey, ast_to_wisez = \
+                    get_positions(matchids_curlformat[jj], jd_f)
+            except Exception as err2:
+                print(f"Horizons permanently failed for {matchids[jj]}: {err2}; "
+                      f"skipping (re-run with --istart {jj} to retry)", flush=True)
+                continue
 
         _write_obs_file(
             cfg, matchids_curlformat[jj], jd_f, wbflux, wbfluxerr, wrflux, wrfluxerr,

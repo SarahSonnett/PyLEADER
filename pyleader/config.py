@@ -41,6 +41,9 @@ def resolve_data_file(name: str, base_dir: str) -> str:
         return local
     shipped = os.path.join(PKG_DATA_DIR, name + ".gz")
     if os.path.exists(shipped):
+        print(f"[resolve_data_file] NOTE: {name} not found in base_dir "
+              f"({base_dir}); using the copy shipped with the package. If a "
+              f"newer/population-specific file was intended, check base_dir.")
         return shipped
     return local
 

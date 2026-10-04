@@ -47,12 +47,27 @@ def diameter_matched_files(cfg: AnalysisConfig, name_mpced_n=None, diam_n=None):
                  if f.endswith(".obs") and not f.startswith("Nofilter")]
 
     matched = []
+    n_incat = 0
     for path in lcg_files:
         objname = path.split("/")[-1].split(".")[0]
         objname_mpec = convert_to_mpecname(objname)
-        diammatch = np.mean(np.asarray(diam_n.compress((name_mpced_n == objname_mpec).flat), dtype=float))
+        diams = np.asarray(diam_n.compress((name_mpced_n == objname_mpec).flat), dtype=float)
+        if diams.size:
+            n_incat += 1
+        diammatch = np.mean(diams) if diams.size else np.nan
         if cfg.diam_low <= diammatch <= cfg.diam_high:
             matched.append(path)
+    # Loud-default guard: a wrong catalog fails SILENTLY here (every lookup
+    # returns empty -> NaN -> excluded), e.g. a non-mainbelt population run
+    # against the mainbelt table. If most of the obs files are unknown to
+    # the catalog, the catalog is wrong -- say so.
+    if lcg_files and n_incat / len(lcg_files) < 0.5:
+        raise RuntimeError(
+            f"only {n_incat}/{len(lcg_files)} .obs objects in {cfg.datadir} "
+            f"match the NEOWISE catalog {cfg.neowise_path} -- wrong catalog "
+            f"for this population? Pass the matching PDS table via "
+            f"--neowise-fle (e.g. neowise_jupiter_trojans.csv)."
+        )
     return matched
 
 

@@ -53,9 +53,26 @@ def _resolve_background(cfg: ObsBuildConfig):
     if not os.path.exists(path):
         raise FileNotFoundError(f"Background membership file not found: {path}")
 
-    objnum, provdesig, packed = np.genfromtxt(
-        path, unpack=True, usecols=(0, 1, 2), dtype=str
-    )
+    # Strict parse: BGobjs rows are exactly 5 whitespace tokens
+    # (objnum provdesig packed diam diamerr). A provisional designation with
+    # an INTERNAL SPACE shifts every column and silently queries the wrong
+    # object -- reject malformed rows loudly.
+    objnum_l, provdesig_l, packed_l = [], [], []
+    with open(path) as fh:
+        for ii, line in enumerate(fh, 1):
+            tok = line.split()
+            if not tok:
+                continue
+            if len(tok) != 5:
+                raise ValueError(
+                    f"{path}:{ii}: expected 5 columns, got {len(tok)} "
+                    f"({line.rstrip()!r}). Designations must have internal "
+                    f"spaces stripped (e.g. 2008RK58, not '2008 RK58')."
+                )
+            objnum_l.append(tok[0]); provdesig_l.append(tok[1]); packed_l.append(tok[2])
+    objnum = np.asarray(objnum_l)
+    provdesig = np.asarray(provdesig_l)
+    packed = np.asarray(packed_l)
     matchids = np.asarray([p.replace('"', "").strip() for p in np.atleast_1d(packed)])
     objnum = np.atleast_1d(objnum)
     provdesig = np.atleast_1d(provdesig)

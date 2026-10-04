@@ -24,6 +24,11 @@ def get_positions(objid: str, jd_def):
     # Provisional designations need packing for Horizons
     if len(objid) > 5 and objid[0:4].isdigit() and objid[4:6].isalpha():
         objid = convert_to_mpecname(objid)
+    elif objid.strip().isdigit():
+        # Bare asteroid numbers collide with Horizons major-body/satellite
+        # codes (e.g. "624" -> Kiviuq, not 624 Hektor); the trailing ";"
+        # forces a small-body record lookup.
+        objid = objid.strip().lstrip("0") + ";"
 
     t = Time(jd_def, format="jd")
     utc = t.to_datetime()
